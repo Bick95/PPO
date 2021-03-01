@@ -24,7 +24,7 @@ class CNN_Module(nn.Module):
         return x
 
 
-
+# TODO: add MLP input module here
 
 
 

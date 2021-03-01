@@ -23,10 +23,16 @@ class Policy:
 
         if os_size == 1:
             # Heuristic: assume MLP to apply in this case
-            self.nature_input_layer =
+            #self.nature_input_layer = None
+            pass
+            # TODO: immediately create input module here
         else:
             # Heuristic: assume CNN to apply here
-            self.nature_input_layer =
+            #self.nature_input_layer = None
+            pass
+            # TODO: immediately create input module here
+
+        # TODO: create output modules here
 
 
 
