@@ -12,15 +12,20 @@ class Policy(nn.Module):
 
     def __init__(self,
                  action_space: gym.Space,
-                 observation_space: gym.Space,
+                 observation_space: gym.spaces.Discrete or gym.spaces.Box,
                  input_net_type: str = 'CNN'
                  ):
 
         super(Policy, self).__init__()
 
-        self.action_space = action_space
-        self.num_actions = self.action_space.n
         self.observation_space = observation_space
+        self.action_space = action_space
+        self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
+        # NOTE!
+        # In Continuous case, x actions may be sampled concurrently per env.
+        # In Discrete case, only one action is sampled at a time from action space in a given env.
+        # Thus, meaning of self.num_actions varies between these two output spaces!
+        self.num_actions = self.action_space.n if self.dist_type is CONTINUOUS else len(action_space.sample())
 
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
             # Create CNN-NN to encode inputs
@@ -32,8 +37,6 @@ class Policy(nn.Module):
 
             # Create MLP-NN to encode inputs
             self.input_module = InMLP(input_features)
-
-        self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
 
         self.output_module = OutMLP(hidden_features=50,
                                     output_features=self.num_actions,
