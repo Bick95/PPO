@@ -11,8 +11,8 @@ from torch.distributions import Categorical, Normal
 class Policy(nn.Module):
 
     def __init__(self,
-                 action_space: gym.Space,
-                 observation_space: gym.spaces.Discrete or gym.spaces.Box,
+                 action_space: gym.spaces.Discrete or gym.spaces.Box,
+                 observation_space: gym.Space,
                  input_net_type: str = 'CNN'
                  ):
 
