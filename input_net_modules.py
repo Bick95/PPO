@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -16,15 +18,56 @@ class CNN_Module(nn.Module):
                                 out_channels=32,
                                 kernel_size=4,
                                 stride=2)
+        self.fc1 = nn.Linear(32 * 4 * 4, 256)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = x.view(-1, 32 * 4 * 4)  # Flatten
+        x = F.relu(self.fc1(x))
         return x
 
 
-# TODO: add MLP input module here
+class MLP_Module(nn.Module):
+    def __init__(self,
+                 input_features: int,
+                 hidden_nodes: int or list = [50, 50, 50],
+                 nonlinearity: torch.nn.functional = F.relu
+                 ):
+        super(MLP_Module, self).__init__()
+
+        # Construct NN-processing pipeline consisting of concatenation of layers to be applied to any input
+        self.pipeline = [
+
+            # Add input layer
+            nn.Linear(
+                input_features,
+                hidden_nodes[0] if isinstance(hidden_nodes, list) else hidden_nodes
+            )
+
+        ]
+
+        # Add optional hidden layers
+        if isinstance(hidden_nodes, list):
+            for i in range(1, len(hidden_nodes)):
+                self.pipeline.append(
+                    nn.Linear(hidden_nodes[i-1], hidden_nodes[i])
+                )
+
+        self.nonlinearity = nonlinearity
+
+    def forward(self, x):
+
+        for layer in self.pipeline:
+            x = self.nonlinearity(layer(x))
+
+        return x
 
 
-
+# Testing
+#import gym
+#env = gym.make('CartPole-v1')
+#observation = env.observation_space.sample()
+#observation_shape = torch.tensor(observation.shape)
+#net = MLP_Module(observation_shape[0])
+#net(torch.tensor(observation))
