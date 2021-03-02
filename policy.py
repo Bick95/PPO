@@ -1,41 +1,82 @@
 import gym
+from input_net_modules import InMLP, InCNN
+from output_net_modules import OutMLP
+from constants import DISCRETE, CONTINUOUS
+
 import torch
-import numpy as np
+import torch.nn as nn
+from torch.distributions import Categorical, Normal
 
 
-
-
-CONTINUOUS_OUT  = 0
-DISCRETE_OUT    = 1
-
-class Policy:
+class Policy(nn.Module):
 
     def __init__(self,
                  action_space: gym.Space,
-                 observation_space: gym.Space
+                 observation_space: gym.Space,
+                 input_net_type: str = 'CNN'
                  ):
 
+        super(Policy, self).__init__()
+
         self.action_space = action_space
+        self.num_actions = self.action_space.n
         self.observation_space = observation_space
 
-        as_size = np.array(self.action_space.sample().shape).size
-        os_size = np.array(self.observation_space.sample().shape).size
+        if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
+            # Create CNN-NN to encode inputs
+            self.input_module = None  # TODO: InCNN
 
-        if os_size == 1:
-            # Heuristic: assume MLP to apply in this case
-            #self.nature_input_layer = None
-            pass
-            # TODO: immediately create input module here
         else:
-            # Heuristic: assume CNN to apply here
-            #self.nature_input_layer = None
-            pass
-            # TODO: immediately create input module here
+            # Compute nr of input features for given gym env
+            input_features = sum(self.observation_space.sample().shape)
 
-        # TODO: create output modules here
+            # Create MLP-NN to encode inputs
+            self.input_module = InMLP(input_features)
+
+        self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
+
+        self.output_module = OutMLP(hidden_features=50,
+                                    output_features=self.num_actions,
+                                    output_type=self.dist_type
+                                    )
+
+        self.prob_dist = Categorical if self.dist_type is DISCRETE else Normal
+
+        # Construct deterministic processing pipeline in policy net
+        self.pipeline = [
+            self.input_module,
+            self.output_module
+        ]
+
+        if self.dist_type is DISCRETE:
+            self.pipeline.append(torch.softmax)
+
+        # Vars for later
+        self.dist = None
 
 
+    def forward(self, x: torch.tensor):
+
+        for layer in self.pipeline:
+            x = layer(x)
+
+        if self.dist_type is DISCRETE:
+            self.dist = self.prob_dist(probs=x)
+        else:
+            self.dist = self.prob_dist(loc=x, scale=torch.ones(self.num_actions))
+
+        action = self.dist.sample()
+
+        return action
 
 
+    def log_probs(self, action):
+        return self.dist.log_prob(action)
 
 
+    def entropy(self):
+        return self.dist.entropy()
+
+
+    def get_non_output_layers(self):
+        return self.input_module

@@ -1,0 +1,2 @@
+DISCRETE    = 0
+CONTINUOUS  = 1

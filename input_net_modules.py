@@ -4,10 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class CNN_Module(nn.Module):
+class InCNN(nn.Module):
 
     def __init__(self):
-        super(CNN_Module, self).__init__()
+        super(InCNN, self).__init__()
 
         self.conv_1 = nn.Conv2d(in_channels=3,    # 3 color channels
                                 out_channels=16,  # 16 output channels = 16 filters
@@ -28,13 +28,13 @@ class CNN_Module(nn.Module):
         return x
 
 
-class MLP_Module(nn.Module):
+class InMLP(nn.Module):
     def __init__(self,
                  input_features: int,
                  hidden_nodes: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu
                  ):
-        super(MLP_Module, self).__init__()
+        super(InMLP, self).__init__()
 
         # Construct NN-processing pipeline consisting of concatenation of layers to be applied to any input
         self.pipeline = [
