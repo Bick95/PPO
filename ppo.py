@@ -13,13 +13,16 @@ class ProximalPolicyOptimization:
                  param_sharing: bool = True,
                  learning_rate: float = 0.0001,
                  num_envs: int = 8,
-                 trajectory_length: int = 1000
+                 trajectory_length: int = 1000,
+                 discount_factor: float = 0.98
+                 # TODO: clean up args... with proper imports!
                  ):
 
         # Save variables
         self.epochs = epochs
         self.parallel_agents = parallel_agents
         self.T = trajectory_length
+        self.gamma = discount_factor
 
         # Create Gym env if not provided as such
         if isinstance(env, str):
@@ -39,7 +42,7 @@ class ProximalPolicyOptimization:
 
         # Create optimizers
         self.optimizer = torch.optim.Adam(params=[self.policy.base.parameters(),
-                                                  self.val_net.base.parameters],
+                                                  self.val_net.base.parameters()],
                                           lr=learning_rate)
 
 
@@ -78,16 +81,26 @@ class ProximalPolicyOptimization:
                     observation = (state, action, reward, next_state, terminal_state)
                     obs_temp.append(observation)
 
+                    # Add number of added train steps to counter
+                    train_steps += self.parallel_agents
+
+
                     # Prepare next iteration: reset? state = next_state, ...
                     if terminal_state.any() or train_steps >= self.T:
                         # Reset env for case where train_steps < max_trajectory_length T
                         state = self.env.reset()
 
-                        # Add temp observations to current iteration's observations
-                        last_state = obs_temp[-1][4]
-                        target_state_val = self.val_net(last_state)
+                        # -- Add temp observations to current iteration's overall observations --
+                        # Compute state value of final observed state
+                        last_state = obs_temp[-1][3]
+                        target_state_val = self.val_net(last_state)  # V(s_T)
+
+                        # Compute the target state value and advantage estimate for each state in agent's trajectory
+                        # (batch-wise for all parallel agents in parallel)
                         for t in range(len(obs_temp)-1, -1, -1):
-                            target_state_val = target_state_val + obs_temp[t][2]
+                            # V^{target}_t = r_t + \gamma * r_{t+1} + ... + \gamma^{n-1} * r_{t+1-1} + \gamma^n * V(s_{t+n}, where t+n=T
+                            target_state_val = obs_temp[t][2] + self.gamma * target_state_val
+
                             state_val = self.val_net(obs_temp[t][0])
                             advantage = target_state_val - state_val
 
@@ -95,18 +108,19 @@ class ProximalPolicyOptimization:
                             extra = (target_state_val, advantage)
                             augmented_obs = obs_temp[t] + extra
 
-                            # Add all parallel agents' individual observations to overall observations
+                            # Add all parallel agents' individual observations to overall observations list
                             for i in range(self.parallel_agents):
-                                tpl = tuple([x for x in augmented_obs])
-                                # TODO: add tuple FOR EACH agent AND each kind (like state vs next state vs rewards...)
-                                observations.append()
+                                # Create i^th agent's private observation tuple for time step t in current trajectory
+                                # element \in {state, action, reward, next_state, terminal_state, target_val, advantage}
+                                private_tuple = tuple([element[i] for element in augmented_obs])
+                                observations.append(private_tuple)
 
+                        # Empty temporary list of observations after they have been added to more persistent list
+                        obs_temp = []
 
                     else:
                         state = next_state
 
-                    train_steps += self.parallel_agents
-
-            # Perform weight updates for multiple epochs on freshly collected training data
+            # Perform weight updates for multiple epochs on freshly collected training data stored in 'observations'
             for epoch in range(self.epochs):
                 pass
