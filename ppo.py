@@ -9,19 +9,21 @@ class ProximalPolicyOptimization:
 
     def __init__(self,
                  env: gym.Env or str,
-                 epochs: int = 1000000,
+                 epochs: int = 10,
+                 total_num_state_transitions: int = 1000000,
                  parallel_agents: int = 8,
                  param_sharing: bool = True,
                  learning_rate: float = 0.0001,
                  trajectory_length: int = 1000,
                  discount_factor: float = 0.98,
                  batch_size: int = 32,
-                 epsilon: float = 0.2
+                 epsilon: float = 0.2,
                  # TODO: clean up args... with proper imports!
                  ):
 
         # Save variables
         self.epochs = epochs
+        self.iterations = total_num_state_transitions // trajectory_length
         self.parallel_agents = parallel_agents
         self.T = trajectory_length
         self.gamma = discount_factor
