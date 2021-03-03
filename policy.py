@@ -73,7 +73,7 @@ class Policy(nn.Module):
         return action
 
 
-    def log_probs(self, action):
+    def log_prob(self, action):
         return self.dist.log_prob(action)
 
 
