@@ -22,18 +22,15 @@ class Policy(nn.Module):
         self.action_space = action_space
         self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
         # NOTE!
-        # In Continuous case, x actions may be sampled concurrently per env.
-        # In Discrete case, only one action is sampled at a time from action space in a given env.
-        # Thus, meaning of self.num_actions varies between these two output spaces!
+        # In Continuous case, n actions may be sampled concurrently per env.
+        # In Discrete case, only one action (out of n options) is sampled at a time from action space in a given env.
+        # Thus, meaning of self.num_actions varies between these two output spaces/cases!
 
-        if self.dist_type is CONTINUOUS:
+        if self.dist_type is DISCRETE:
             self.num_actions = self.action_space.n
         else:
-            s = action_space.sample()
-            if isinstance(s, int):
-                self.num_actions = 1
-            else:
-                self.num_actions = len(list(s))
+            # Assumption: no flattening needed!
+            self.num_actions = action_space.shape[0]
 
 
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
@@ -61,13 +58,15 @@ class Policy(nn.Module):
         ]
 
         if self.dist_type is DISCRETE:
-            self.pipeline.append(torch.softmax)
+            self.pipeline.append(torch.nn.Softmax(dim=1))
 
         # Vars for later
         self.dist = None
 
 
     def forward(self, x: torch.tensor):
+
+        print("x::\n", x)
 
         for layer in self.pipeline:
             x = layer(x)

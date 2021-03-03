@@ -54,6 +54,10 @@ class InMLP(nn.Module):
                     nn.Linear(hidden_nodes[i-1], hidden_nodes[i])
                 )
 
+        # Register all layers
+        for i, layer in enumerate(self.pipeline):
+            self.add_module("layer_mlp_in_" + str(i), layer)
+
         self.nonlinearity = nonlinearity
 
     def forward(self, x):

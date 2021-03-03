@@ -24,6 +24,10 @@ class OutMLP(nn.Module):
 
         ]
 
+        # Register all layers
+        for i, layer in enumerate(self.pipeline):
+            self.add_module("layer_mlp_out_" + str(i), layer)
+
         # Add optional normalization of outputs
         if output_type is DISCRETE:
             self.pipeline.append(F.softmax)

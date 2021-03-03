@@ -42,17 +42,17 @@ class ProximalPolicyOptimization:
 
         # Create policy net
         self.policy = Policy(self.action_space, self.observation_space, 'MLP')
+        print(self.policy)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
             self.val_net = ValueNet(shared_layers=self.policy.get_non_output_layers())
         else:
-            self.val_net = ValueNet(self.observation_space, 'CNN')
+            self.val_net = ValueNet(self.observation_space, 'MLP')
 
         # Create optimizers
-        self.optimizer = torch.optim.Adam(params=[self.policy.parameters(),
-                                                  self.val_net.parameters()],
-                                          lr=learning_rate)
+        self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate)
+        self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate)
 
 
         # Vectorize env using info about nr of parallel agents
@@ -62,14 +62,14 @@ class ProximalPolicyOptimization:
 
     def learn(self):
 
-        for iteration in range(self.iterations):  # TODO
+        for iteration in range(self.iterations):
             # Init data collection and storage
             train_steps = 0
             observations = []
             obs_temp = []
 
             # Init envs
-            state = self.env.reset()
+            state = torch.tensor(self.env.reset())
 
             # Collect training data
             with torch.no_grad():
@@ -78,7 +78,7 @@ class ProximalPolicyOptimization:
                     action = self.policy(state)
 
                     # Perform action in env
-                    next_state, reward, terminal_state, _ = self.env.step(action)
+                    next_state, reward, terminal_state, _ = self.env.step(action.numpy())
 
                     # Get log-prob of chosen action (= log \pi_{\theta_{old}}(a_t|s_t) )
                     log_prob = self.policy.log_prob(action)
@@ -101,7 +101,7 @@ class ProximalPolicyOptimization:
                     # Prepare for next iteration
                     if terminal_state.any() or train_steps >= self.T:
                         # Reset env for case where train_steps < max_trajectory_length T
-                        state = self.env.reset()
+                        state = torch.tensor(self.env.reset())
 
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
@@ -145,7 +145,8 @@ class ProximalPolicyOptimization:
                 # Perform weight update on each minibatch contained in shuffled observations
                 for i in range(0, len(observations), self.batch_size):
                     # Reset all grads
-                    self.optimizer.zero_grad()
+                    self.optimizer_p.zero_grad()
+                    self.optimizer_v.zero_grad()
 
                     # Sample minibatch
                     minibatch = observations[i: i+self.batch_size]
@@ -177,11 +178,12 @@ class ProximalPolicyOptimization:
                     loss.backward()
 
                     # Perform weight update
-                    self.optimizer.step()
+                    self.optimizer_p.step()
+                    self.optimizer_v.step()
 
                     # Document loss
-                    print('Loss:', loss)
-                    self.losses.append(loss.numpy())
+                    print('Loss:', loss, loss.data[0], loss.numpy())
+                    self.losses.append(loss.data[0])
 
 
     def ratio(self, numerator, denominator):
