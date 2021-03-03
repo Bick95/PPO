@@ -25,7 +25,16 @@ class Policy(nn.Module):
         # In Continuous case, x actions may be sampled concurrently per env.
         # In Discrete case, only one action is sampled at a time from action space in a given env.
         # Thus, meaning of self.num_actions varies between these two output spaces!
-        self.num_actions = self.action_space.n if self.dist_type is CONTINUOUS else len(action_space.sample())
+
+        if self.dist_type is CONTINUOUS:
+            self.num_actions = self.action_space.n
+        else:
+            s = action_space.sample()
+            if isinstance(s, int):
+                self.num_actions = 1
+            else:
+                self.num_actions = len(list(s))
+
 
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
             # Create CNN-NN to encode inputs

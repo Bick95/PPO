@@ -18,6 +18,7 @@ class ProximalPolicyOptimization:
                  discount_factor: float = 0.98,
                  batch_size: int = 32,
                  epsilon: float = 0.2,
+                 feedback_frequency: int = 5,
                  # TODO: clean up args... with proper imports!
                  ):
 
@@ -49,8 +50,8 @@ class ProximalPolicyOptimization:
             self.val_net = ValueNet(self.observation_space, 'CNN')
 
         # Create optimizers
-        self.optimizer = torch.optim.Adam(params=[self.policy.base.parameters(),
-                                                  self.val_net.base.parameters()],
+        self.optimizer = torch.optim.Adam(params=[self.policy.parameters(),
+                                                  self.val_net.parameters()],
                                           lr=learning_rate)
 
 
@@ -179,6 +180,7 @@ class ProximalPolicyOptimization:
                     self.optimizer.step()
 
                     # Document loss
+                    print('Loss:', loss)
                     self.losses.append(loss.numpy())
 
 
@@ -205,3 +207,9 @@ class ProximalPolicyOptimization:
     def L_VF(self, state_val: torch.tensor, target_state_val: torch.tensor):
         # Loss function for state-value network. Quadratic loss between predicted and target state value
         return torch.mean((state_val - target_state_val) ** 2)
+
+
+    def save(self, path_policy: str = './policy_model.pt', path_val_net: str = './val_net_model.pt'):
+        torch.save(self.policy.state_dict(), path_policy)
+        if path_val_net is not None:
+            torch.save(self.val_net.state_dict(), path_val_net)
