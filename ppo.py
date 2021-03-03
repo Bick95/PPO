@@ -155,7 +155,7 @@ class ProximalPolicyOptimization:
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
                     # Compute log_prob of action(s)
-                    _ = self.policy(state)
+                    _ = self.policy(list(state))
                     log_prob = self.policy.log_prob(action)
 
                     # Compute current state value estimates
