@@ -30,7 +30,7 @@ class OutMLP(nn.Module):
 
         # Add optional normalization of outputs
         if output_type is DISCRETE:
-            self.pipeline.append(F.softmax)
+            self.pipeline.append(nn.Softmax(dim=1))
 
     def forward(self, x):
 

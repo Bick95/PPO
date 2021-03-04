@@ -5,6 +5,9 @@ from policy import Policy
 from value_net import ValueNet
 
 
+# TODO: ADD DEMO/PLAYING MODE!
+
+
 class ProximalPolicyOptimization:
 
     def __init__(self,
@@ -67,6 +70,7 @@ class ProximalPolicyOptimization:
     def learn(self):
 
         for iteration in range(self.iterations):
+            print('Iteration:', iteration)
             # Init data collection and storage
             train_steps = 0
             observations = []
@@ -88,11 +92,9 @@ class ProximalPolicyOptimization:
                     log_prob = self.policy.log_prob(action)
 
                     # Transform to tensor data
-                    state = torch.tensor(state)
                     reward = torch.tensor(reward)
                     next_state = torch.tensor(next_state)
                     terminal_state = torch.tensor(terminal_state)
-                    log_prob = torch.tensor(log_prob)
 
                     # Collect observable data
                     observation = (state, action, reward, next_state, terminal_state, log_prob)
@@ -117,7 +119,6 @@ class ProximalPolicyOptimization:
                         # (batch-wise for all parallel agents in parallel)
                         for t in range(len(obs_temp)-1, -1, -1):
                             #print('t:', t, 'len obs_temp:', len(obs_temp))
-                            # TODO: something is going wrong here when computing target_state_val!!!
                             # Compute target state value:
                             # V^{target}_t = r_t + \gamma * r_{t+1} + ... + \gamma^{n-1} * r_{t+n-1} + \gamma^n * V(s_{t+n}), where t+n=T
                             #print('obs_temp[t][2]:\n', obs_temp[t][2])
@@ -151,6 +152,7 @@ class ProximalPolicyOptimization:
 
             # Perform weight updates for multiple epochs on freshly collected training data stored in 'observations'
             for epoch in range(self.epochs):
+                print('Epoch:', epoch)
                 # Shuffle data
                 random.shuffle(observations)  # Shuffle in place!
 
