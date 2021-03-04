@@ -27,7 +27,7 @@ class ProximalPolicyOptimization:
 
         # Save variables
         self.epochs = epochs
-        self.iterations = total_num_state_transitions // trajectory_length
+        self.iterations = total_num_state_transitions // (trajectory_length * parallel_agents)
         self.parallel_agents = parallel_agents
         self.T = trajectory_length
         self.gamma = discount_factor
