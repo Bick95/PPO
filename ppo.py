@@ -10,19 +10,18 @@ class ProximalPolicyOptimization:
 
     def __init__(self,
                  env: gym.Env or str,
-                 epochs: int = 5,
-                 total_num_state_transitions: int = 1000000,
-                 parallel_agents: int = 16,
+                 epochs: int = 10,
+                 total_num_state_transitions: int = 5000000,
+                 parallel_agents: int = 10,
                  param_sharing: bool = True,
-                 learning_rate: float = 0.0001,
-                 trajectory_length: int = 300,
+                 learning_rate_pol: float = 0.0001,
+                 learning_rate_val: float = 0.0001,
+                 trajectory_length: int = 1000,
                  discount_factor: float = 0.99,
                  batch_size: int = 32,
                  clipping_constant: float = 0.2,
-                 feedback_frequency: int = 5,
-                 weighting_entropy: float = 0.15,
-                 weighting_vf: float = .9,
-                 # TODO: clean up args... with proper imports!
+                 entropy_contrib_factor: float = 0.15,
+                 vf_contrib_factor: float = .9,
                  ):
 
         # Save variables
@@ -33,9 +32,10 @@ class ProximalPolicyOptimization:
         self.gamma = discount_factor
         self.batch_size = batch_size
         self.epsilon = clipping_constant
-        self.h = weighting_entropy
-        self.vf = weighting_vf
+        self.h = entropy_contrib_factor
+        self.v = vf_contrib_factor
 
+        # Set up documentation of training stats
         self.training_stats = {
             # How loss accumulated over one epoch develops over time
             'devel_epoch_loss': [],
@@ -60,7 +60,7 @@ class ProximalPolicyOptimization:
         self.action_space = env.action_space
 
         # Create policy net
-        self.policy = Policy(self.action_space, self.observation_space, 'MLP')
+        self.policy = Policy(action_space=self.action_space, observation_space=self.observation_space, input_net_type='MLP')
         print(self.policy)
 
         # Create value net (either sharing parameters with policy net or not)
@@ -70,21 +70,24 @@ class ProximalPolicyOptimization:
             self.val_net = ValueNet(self.observation_space, 'MLP')
 
         # Create optimizers
-        self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate)
-        self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate)
+        self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
+        self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
 
 
-        # Vectorize env using info about nr of parallel agents
+        # Vectorize env for each parallel agent to get its own env
         self.env_name = env.unwrapped.spec.id
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
 
 
     def learn(self):
+
+        # Evaluate performance of policy before training
         print('Initial demo:')
         total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
         self.training_stats['init_acc_reward'].append(total_rewards)
         self.training_stats['init_avg_traj_len'].append(avg_traj_len)
 
+        # Start training
         for iteration in range(self.iterations):
             print('Iteration:', iteration)
 
@@ -93,7 +96,7 @@ class ProximalPolicyOptimization:
             observations = []
             obs_temp = []
 
-            # Init envs
+            # Init (parallel) envs
             state = torch.tensor(self.env.reset())
 
             # Collect training data
@@ -219,7 +222,7 @@ class ProximalPolicyOptimization:
                     L_V = self.L_VF(state_val, target_state_val_)
 
                     # L^{CLIP + H + V} = L^{CLIP} + L^{ENTROPY} + L^{V}
-                    loss = - L_CLIP - self.h * L_ENTROPY + self.vf * L_V
+                    loss = - L_CLIP - self.h * L_ENTROPY + self.v * L_V
 
                     # Backprop loss
                     loss.backward()

@@ -1,0 +1,15 @@
+{
+    "env": "CartPole-v1",
+    "total_num_state_transitions": 5000000,
+    "epochs": 10,
+    "parallel_agents": 10,
+    "param_sharing": True,
+    "learning_rate_pol": 0.0001,
+    "learning_rate_val": 0.0001,
+    "trajectory_length": 1000,
+    "discount_factor": 0.99,
+    "batch_size": 32,
+    "clipping_constant": 0.2,
+    "entropy_contrib_factor": 0.15,
+    "vf_contrib_factor": .9,
+}
