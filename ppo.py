@@ -288,14 +288,33 @@ class ProximalPolicyOptimization:
 
 
     def save(self, path_policy: str = './policy_model.pt', path_val_net: str = './val_net_model.pt'):
-        torch.save(self.policy.state_dict(), path_policy)
+        torch.save(self.policy, path_policy)
+
         if path_val_net is not None:
-            torch.save(self.val_net.state_dict(), path_val_net)
+            torch.save(self.val_net, path_val_net)
+        print('Saved model.')
+
+
+    def load(self, path_policy: str = './policy_model.pt', path_val_net: str = None, train_stats_path: str = None):
+        self.policy = torch.load(path_policy)
+        self.policy.eval()
+        print('Loaded policy net.')
+
+        if path_val_net:
+            self.val_net = torch.load(path_val_net)
+            self.val_net.eval()
+            print('Loaded value net.')
+
+        if train_stats_path:
+            with open(train_stats_path) as json_file:
+                self.training_stats = json.load(json_file)
+            print('Loaded training stats.')
 
 
     def save_train_stats(self, path: str = './train_stats.json'):
         with open(path, 'w') as outfile:
             json.dump(self.training_stats, outfile)
+        print('Saved training stats.')
 
 
     def eval(self, time_steps: int = 200, render=False):

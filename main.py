@@ -1,5 +1,4 @@
 import ast
-import json
 import argparse
 from plot import plot_avg_trajectory_len
 from ppo import ProximalPolicyOptimization as PPO
@@ -8,15 +7,16 @@ from ppo import ProximalPolicyOptimization as PPO
 # Create parser
 parser = argparse.ArgumentParser(description='Interact with an PPO agent.')
 
-# Training # TODO for later: remove defaults when done with debugging
+# Training
 parser.add_argument('-c', '--config_path', type=str, required=False, help='Specify path from where to load non-default config file', default='./config.py')
+# TODO for later: remove defaults when done with debugging
 parser.add_argument('-s', '--stats_path', type=str, required=False, help='Specify path where to save training stats.', default='./train_stats.json')
 parser.add_argument('-p', '--policy_net_path', type=str, required=False, help='Specify path where to save policy net.', default='./policy_model.pt')
 parser.add_argument('-v', '--value_net_path', type=str, required=False, help='Specify path where to save value net.', default='./val_net_model.pt')
 parser.add_argument('-g', '--graphic_path', type=str, required=False, help='Specify path where to save graphic/plot.', default='./traj_len_fig.png')
 
 # Demo/Eval
-parser.add_argument('-d', '--demo_path', type=str, required=False, help='Specify path from where to load model for demonstrating its learning outcome visually.')
+parser.add_argument('-d', '--demo_path', type=str, required=False, help='Specify path from where to load policy model for demonstrating its learning outcome visually.')
 
 # Parse arguments
 args = parser.parse_args()
@@ -26,21 +26,23 @@ def main(args):
 
     print('Args:\n', args)
 
+    # Load configurations from file
+    file = open(args.config_path, 'r').read()
+    config = ast.literal_eval(file)
+
+    # Print config for feedback purposes
+    print('Config:\n', config)
+
     if args.demo_path:
         # Demo mode
-
         print('Demo mode. Model used for running demonstration:', args.demo_path)
-        # TODO
+
+        ppo = PPO(env=config['env'])
+        ppo.load(args.demo_path)
+        ppo.eval(time_steps=5000, render=True)
 
     else:
         # Training mode
-
-        # Load configurations from file
-        file = open(args.config_path, 'r').read()
-        config = ast.literal_eval(file)
-
-        # Print config for feedback purposes
-        print('Config:\n', config)
 
         # Set up PPO agent as specified in configurations
         ppo = PPO(**config)
