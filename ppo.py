@@ -9,17 +9,17 @@ class ProximalPolicyOptimization:
 
     def __init__(self,
                  env: gym.Env or str,
-                 epochs: int = 5,
-                 total_num_state_transitions: int = 1000,
+                 epochs: int = 10,
+                 total_num_state_transitions: int = 100000,
                  parallel_agents: int = 8,
                  param_sharing: bool = True,
                  learning_rate: float = 0.0001,
                  trajectory_length: int = 1000,
-                 discount_factor: float = 0.98,
-                 batch_size: int = 32,
-                 epsilon: float = 0.2,
+                 discount_factor: float = 0.95,
+                 batch_size: int = 64,
+                 clipping_constant: float = 0.2,
                  feedback_frequency: int = 5,
-                 weighting_entropy: float = 0.1,
+                 weighting_entropy: float = 0.2,
                  weighting_vf: float = 1.,
                  # TODO: clean up args... with proper imports!
                  ):
@@ -31,7 +31,7 @@ class ProximalPolicyOptimization:
         self.T = trajectory_length
         self.gamma = discount_factor
         self.batch_size = batch_size
-        self.epsilon = epsilon
+        self.epsilon = clipping_constant
         self.h = weighting_entropy
         self.vf = weighting_vf
 
@@ -65,10 +65,11 @@ class ProximalPolicyOptimization:
 
 
     def learn(self):
+        print('Initial demo:')
+        #self.demo(time_steps=1000, render=True)
 
         for iteration in range(self.iterations):
             print('Iteration:', iteration)
-            self.demo()
 
             # Init data collection and storage
             train_steps = 0
@@ -112,8 +113,20 @@ class ProximalPolicyOptimization:
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
                         last_state = obs_temp[-1][3]
-                        target_state_val = self.val_net(last_state).squeeze()  # V(s_T)
-                        #print('V(s_T):\n', target_state_val)
+                        target_state_val = self.val_net(last_state).squeeze()  # V(s_T) # TODO: set 0 where terminal
+                        print('(optimistic)\tV(s_T):\n', target_state_val)
+
+                        # Set valuations of terminal states to 0
+                        print('Terminal -2 :', obs_temp[-2][4])
+                        print('Terminal -1 :', obs_temp[-1][4])
+                        print('Terminal -b :', obs_temp[-1][4].int())
+                        print('Terminal -i :', 1 - obs_temp[-1][4].int())
+
+
+                        termination_mask = 1 - obs_temp[-1][4].int()
+                        target_state_val = target_state_val * termination_mask
+
+                        print('(pessimistic)\tV(s_T):\n', target_state_val)
 
                         # Compute the target state value and advantage estimate for each state in agent's trajectory
                         # (batch-wise for all parallel agents in parallel)
@@ -152,7 +165,6 @@ class ProximalPolicyOptimization:
 
             # Perform weight updates for multiple epochs on freshly collected training data stored in 'observations'
             for epoch in range(self.epochs):
-                print('Epoch:', epoch)
                 # Shuffle data
                 random.shuffle(observations)  # Shuffle in place!
 
@@ -207,10 +219,16 @@ class ProximalPolicyOptimization:
                     self.optimizer_v.step()
 
                     # Document loss
-                    print('Loss:', loss.detach().numpy())
                     self.losses.append(loss.detach().numpy())
 
+            print('Average epoch loss of current iteration:', (self.losses[-1]/self.epochs))
+            print("Current iteration's demo:")
+            self.demo()
+
         self.env.close()
+        print('Final demo:')
+        input("Waiting for user confirmation...")
+        self.demo(time_steps=10000, render=True)
 
 
     def ratio(self, numerator, denominator):
@@ -250,7 +268,7 @@ class ProximalPolicyOptimization:
             torch.save(self.val_net.state_dict(), path_val_net)
 
 
-    def demo(self, time_steps: int = 1000):
+    def demo(self, time_steps: int = 200, render=False):
 
         total_rewards = 0.
         total_restarts = 0
@@ -269,12 +287,12 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += reward
 
-                env.render()
+                if render:
+                    env.render()
 
                 if terminal_state:
                     total_restarts += 1
                     state = torch.tensor([env.reset()], dtype=torch.float)
-                    print('Reset')
                 else:
                     state = torch.tensor([next_state], dtype=torch.float)
 
