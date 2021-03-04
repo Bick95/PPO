@@ -11,10 +11,10 @@ class ProximalPolicyOptimization:
                  env: gym.Env or str,
                  epochs: int = 5,
                  total_num_state_transitions: int = 1000000,
-                 parallel_agents: int = 32,
+                 parallel_agents: int = 16,
                  param_sharing: bool = True,
-                 learning_rate: float = 0.00001,
-                 trajectory_length: int = 250,
+                 learning_rate: float = 0.0001,
+                 trajectory_length: int = 300,
                  discount_factor: float = 0.99,
                  batch_size: int = 32,
                  clipping_constant: float = 0.2,
@@ -114,7 +114,7 @@ class ProximalPolicyOptimization:
                         # Compute state value of final observed state
                         last_state = obs_temp[-1][3]
                         target_state_val = self.val_net(last_state).squeeze()  # V(s_T)
-                        termination_mask = 1 - obs_temp[-1][4].int()  # Only associate last observed states with valuation unequal 0 if they are non-terminal
+                        termination_mask = 1 - obs_temp[-1][4].int().float()  # Only associate last observed states with valuation unequal 0 if they are non-terminal
                         target_state_val = target_state_val * termination_mask
                         #print('(pessimistic)\tV(s_T):\n', target_state_val)
 
@@ -223,8 +223,8 @@ class ProximalPolicyOptimization:
 
 
     # TODO: bugfix
-    def ratio(self, log_numerator, log_denominator):
-        return torch.exp_(log_numerator - log_denominator)  # Computes probability ratio: pi(a|s) / pi_{old}(a|s)
+    #def ratio(self, log_numerator, log_denominator):
+    #    return torch.exp_(log_numerator - log_denominator)  # Computes probability ratio: pi(a|s) / pi_{old}(a|s)
 
 
     def L_CLIP(self, log_prob, log_prob_old, advantage):
@@ -232,14 +232,14 @@ class ProximalPolicyOptimization:
 
         #print('log_prob:', log_prob)
         #print('log_prob_old:', log_prob_old)
-
-        prob_ratio = self.ratio(log_numerator=log_prob, log_denominator=log_prob_old)
+        #x = log_prob - log_prob_old
+        prob_ratio = torch.exp(log_prob - log_prob_old) #torch.exp(log_prob) / torch.exp(log_prob_old)#torch.exp(x) #torch.sub(log_prob, log_prob_old)
 
         #print('prob_ratio:', prob_ratio)
         #print('advantage:', advantage)
 
         unclipped = prob_ratio * advantage
-        clipped = torch.clip_(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
+        clipped = torch.clip(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
 
         return torch.mean(torch.min(unclipped, clipped))
 
@@ -263,7 +263,7 @@ class ProximalPolicyOptimization:
     def demo(self, time_steps: int = 200, render=False):
 
         total_rewards = 0.
-        total_restarts = 0
+        total_restarts = 1.
 
         env = gym.make(self.env_name)
         state = torch.tensor([env.reset()], dtype=torch.float)
