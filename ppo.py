@@ -122,6 +122,8 @@ class ProximalPolicyOptimization:
                             # Augment previously observed observation tuples
                             extra = (target_state_val, advantage)
                             augmented_obs = obs_temp[t] + extra
+                            print('Augmented tuple:', augmented_obs)
+                            exit()
 
                             # Add all parallel agents' individual observations to overall observations list
                             for i in range(self.parallel_agents):
