@@ -10,7 +10,7 @@ class ProximalPolicyOptimization:
     def __init__(self,
                  env: gym.Env or str,
                  epochs: int = 5,
-                 total_num_state_transitions: int = 1000000,
+                 total_num_state_transitions: int = 5000,
                  parallel_agents: int = 16,
                  param_sharing: bool = True,
                  learning_rate: float = 0.0001,
@@ -308,7 +308,7 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += reward
 
-                if render and t < 1000:
+                if render and t < 1000 and False:
                     env.render()
 
                 if terminal_state:
