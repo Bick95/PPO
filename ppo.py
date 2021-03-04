@@ -1,4 +1,5 @@
 import gym
+import json
 import random
 import torch.optim
 from policy import Policy
@@ -10,7 +11,7 @@ class ProximalPolicyOptimization:
     def __init__(self,
                  env: gym.Env or str,
                  epochs: int = 5,
-                 total_num_state_transitions: int = 5000,
+                 total_num_state_transitions: int = 1000000,
                  parallel_agents: int = 16,
                  param_sharing: bool = True,
                  learning_rate: float = 0.0001,
@@ -289,6 +290,11 @@ class ProximalPolicyOptimization:
             torch.save(self.val_net.state_dict(), path_val_net)
 
 
+    def save_train_stats(self, path: str = './train_stats.json'):
+        with open(path, 'w') as outfile:
+            json.dump(self.training_stats, outfile)
+
+
     def eval(self, time_steps: int = 200, render=False):
 
         total_rewards = 0.
@@ -308,7 +314,7 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += reward
 
-                if render and t < 1000 and False:
+                if render and t < 2000:
                     env.render()
 
                 if terminal_state:

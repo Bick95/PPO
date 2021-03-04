@@ -7,5 +7,6 @@ train_stats = ppo.learn()
 print(train_stats)
 
 ppo.save()
+ppo.save_train_stats()
 
 plot_avg_trajectory_len(train_stats)
