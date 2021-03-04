@@ -5,12 +5,6 @@ from plot import plot_avg_trajectory_len
 from ppo import ProximalPolicyOptimization as PPO
 
 
-# Template usage:
-#parser = argparse.ArgumentParser(description='Interact with an PPO agent.')
-#parser.add_argument('-lr', '--learning_rate', type=float, required=False, help='Learning rate both policy and value network training', default=config['learning_rate'])
-#python main.py -lr 0.5
-#python main.py --learning_rate 0.5
-
 # Create parser
 parser = argparse.ArgumentParser(description='Interact with an PPO agent.')
 
@@ -28,10 +22,9 @@ parser.add_argument('-d', '--demo_path', type=str, required=False, help='Specify
 args = parser.parse_args()
 
 
-# TODO: Main, which parses args and then runs PPO with given args
 def main(args):
 
-    print(args)
+    print('Args:\n', args)
 
     if args.demo_path:
         # Demo mode
