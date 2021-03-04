@@ -5,15 +5,12 @@ from policy import Policy
 from value_net import ValueNet
 
 
-# TODO: ADD DEMO/PLAYING MODE!
-
-
 class ProximalPolicyOptimization:
 
     def __init__(self,
                  env: gym.Env or str,
-                 epochs: int = 10,
-                 total_num_state_transitions: int = 1000000,
+                 epochs: int = 5,
+                 total_num_state_transitions: int = 1000,
                  parallel_agents: int = 8,
                  param_sharing: bool = True,
                  learning_rate: float = 0.0001,
@@ -63,14 +60,16 @@ class ProximalPolicyOptimization:
 
 
         # Vectorize env using info about nr of parallel agents
-        env_name = env.unwrapped.spec.id
-        self.env = gym.vector.make(id=env_name, num_envs=self.parallel_agents, asynchronous=False)
+        self.env_name = env.unwrapped.spec.id
+        self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
 
 
     def learn(self):
 
         for iteration in range(self.iterations):
             print('Iteration:', iteration)
+            self.demo()
+
             # Init data collection and storage
             train_steps = 0
             observations = []
@@ -82,6 +81,7 @@ class ProximalPolicyOptimization:
             # Collect training data
             with torch.no_grad():
                 while train_steps < self.T:
+
                     # Predict action
                     action = self.policy(state)
 
@@ -210,6 +210,8 @@ class ProximalPolicyOptimization:
                     print('Loss:', loss.detach().numpy())
                     self.losses.append(loss.detach().numpy())
 
+        self.env.close()
+
 
     def ratio(self, numerator, denominator):
         return numerator / denominator
@@ -246,3 +248,37 @@ class ProximalPolicyOptimization:
         torch.save(self.policy.state_dict(), path_policy)
         if path_val_net is not None:
             torch.save(self.val_net.state_dict(), path_val_net)
+
+
+    def demo(self, time_steps: int = 1000):
+
+        total_rewards = 0.
+        total_restarts = 0
+
+        env = gym.make(self.env_name)
+        state = torch.tensor([env.reset()], dtype=torch.float)
+
+        with torch.no_grad():
+            for t in range(time_steps):
+                # Predict action
+                action = self.policy(state)
+
+                # Perform action in env
+                next_state, reward, terminal_state, _ = env.step(action.squeeze().numpy())
+
+                # Count accumulative rewards
+                total_rewards += reward
+
+                env.render()
+
+                if terminal_state:
+                    total_restarts += 1
+                    state = torch.tensor([env.reset()], dtype=torch.float)
+                    print('Reset')
+                else:
+                    state = torch.tensor([next_state], dtype=torch.float)
+
+        env.close()
+
+        print('Total accumulated reward over', time_steps, 'time steps:', total_rewards)
+        print('Average trajectory length in time steps:', (time_steps/total_restarts))
