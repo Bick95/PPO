@@ -154,22 +154,33 @@ class ProximalPolicyOptimization:
                     # Get all states, actions, log_probs, target_values, and advantage_estimates from minibatch
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
+                    # Transform tuple to tensor
+                    state_ = torch.vstack(state)
+                    action_ = torch.vstack(action).squeeze()
+                    log_prob_old_ = torch.vstack(log_prob_old).squeeze()
+                    target_state_val_ = torch.vstack(target_state_val)
+                    advantage_ = torch.vstack(advantage)
+
+                    print('Comparison:\n state:\n', state, '\nstate_:\n', state_, '\naction:\n', action, '\naction_:\n',
+                          action_, '\nadvantage:\n', advantage, '\nadvantage_:\n', advantage_)
+
                     # Compute log_prob of action(s)
-                    _ = self.policy(list(state))
-                    log_prob = self.policy.log_prob(action)
+                    _ = self.policy(state_)
+                    log_prob = self.policy.log_prob(action_)
+                    print('Dim log_prob:', log_prob.shape)
 
                     # Compute current state value estimates
-                    state_val = self.val_net(state)
+                    state_val = self.val_net(state_)
 
                     # Evaluate loss function:
                     # L^{CLIP}
-                    L_CLIP = self.L_CLIP(log_prob, log_prob_old, advantage)
+                    L_CLIP = self.L_CLIP(log_prob, log_prob_old_, advantage_)
 
                     # L^{H=Entropy}
                     L_ENTROPY = self.L_ENTROPY()
 
                     # L^{V}
-                    L_V = self.L_VF(state_val, target_state_val)
+                    L_V = self.L_VF(state_val, target_state_val_)
 
                     # L^{CLIP + H + V} = L^{CLIP} + L^{ENTROPY} + L^{V}
                     loss = - L_CLIP - L_ENTROPY + L_V
@@ -193,7 +204,13 @@ class ProximalPolicyOptimization:
     def L_CLIP(self, log_prob, log_prob_old, advantage):
         # Computes PPO's main objective L^{CLIP}
 
+        print('log_prob:', log_prob)
+        print('log_prob_old:', log_prob_old)
+
         prob_ratio = self.ratio(numerator=log_prob, denominator=log_prob_old)
+
+        print('prob_ratio:', prob_ratio)
+        print('advantage:', advantage)
 
         unclipped = prob_ratio * advantage
         clipped = torch.clip_(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
