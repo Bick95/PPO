@@ -35,7 +35,21 @@ class ProximalPolicyOptimization:
         self.h = weighting_entropy
         self.vf = weighting_vf
 
-        self.losses = []
+        self.training_stats = {
+            # How loss accumulated over one epoch develops over time
+            'devel_epoch_loss': [],
+            # How average accumulated over all epochs develops per iteration
+            'devel_itera_loss': [],
+
+            'init_avg_traj_len': [],
+            'init_acc_reward': [],
+
+            'train_avg_traj_len': [],
+            'train_acc_reward': [],
+
+            'final_avg_traj_len': [],
+            'final_acc_reward': [],
+        }
 
         # Create Gym env if not provided as such
         if isinstance(env, str):
@@ -66,7 +80,9 @@ class ProximalPolicyOptimization:
 
     def learn(self):
         print('Initial demo:')
-        self.demo(time_steps=10000, render=False)
+        total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
+        self.training_stats['init_acc_reward'].append(total_rewards)
+        self.training_stats['init_avg_traj_len'].append(avg_traj_len)
 
         for iteration in range(self.iterations):
             print('Iteration:', iteration)
@@ -154,7 +170,10 @@ class ProximalPolicyOptimization:
                         state = next_state
 
             # Perform weight updates for multiple epochs on freshly collected training data stored in 'observations'
+            iteration_loss = 0.
             for epoch in range(self.epochs):
+                acc_epoch_loss = 0.
+
                 # Shuffle data
                 random.shuffle(observations)  # Shuffle in place!
 
@@ -208,23 +227,33 @@ class ProximalPolicyOptimization:
                     self.optimizer_p.step()
                     self.optimizer_v.step()
 
-                    # Document loss
-                    self.losses.append(loss.detach().numpy())
+                    # Document training progress
+                    acc_epoch_loss += loss.detach().numpy()
 
-            print('Average epoch loss of current iteration:', (self.losses[-1]/self.epochs))
+                # Document training progress
+                iteration_loss += acc_epoch_loss
+                self.training_stats['devel_epoch_loss'].append(acc_epoch_loss)
+
+            # Document training progress
+            self.training_stats['devel_itera_loss'].append(iteration_loss)
+            print('Average accumulated epoch loss of current iteration:', (iteration_loss/self.epochs))
             print("Current iteration's demo:")
-            self.demo()
+            total_rewards, avg_traj_len = self.eval()
+            self.training_stats['train_acc_reward'].append(total_rewards)
+            self.training_stats['train_avg_traj_len'].append(avg_traj_len)
             print()
 
+        # Clean up after training
         self.env.close()
+
+        # Final evaluation
         print('Final demo:')
         input("Waiting for user confirmation...")
-        self.demo(time_steps=10000, render=True)
+        total_rewards, avg_traj_len = self.eval(time_steps=10000, render=True)
+        self.training_stats['final_acc_reward'].append(total_rewards)
+        self.training_stats['final_avg_traj_len'].append(avg_traj_len)
 
-
-    # TODO: bugfix
-    #def ratio(self, log_numerator, log_denominator):
-    #    return torch.exp_(log_numerator - log_denominator)  # Computes probability ratio: pi(a|s) / pi_{old}(a|s)
+        return self.training_stats
 
 
     def L_CLIP(self, log_prob, log_prob_old, advantage):
@@ -260,7 +289,7 @@ class ProximalPolicyOptimization:
             torch.save(self.val_net.state_dict(), path_val_net)
 
 
-    def demo(self, time_steps: int = 200, render=False):
+    def eval(self, time_steps: int = 200, render=False):
 
         total_rewards = 0.
         total_restarts = 1.
@@ -290,5 +319,9 @@ class ProximalPolicyOptimization:
 
         env.close()
 
+        avg_traj_len = time_steps / total_restarts
+
         print('Total accumulated reward over', time_steps, 'time steps:', total_rewards)
         print('Average trajectory length in time steps:', (time_steps/total_restarts))
+
+        return total_rewards, avg_traj_len
