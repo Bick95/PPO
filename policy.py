@@ -66,8 +66,6 @@ class Policy(nn.Module):
 
     def forward(self, x: torch.tensor):
 
-        print("x::\n", x)
-
         for layer in self.pipeline:
             x = layer(x)
 

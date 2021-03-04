@@ -19,6 +19,8 @@ class ProximalPolicyOptimization:
                  batch_size: int = 32,
                  epsilon: float = 0.2,
                  feedback_frequency: int = 5,
+                 weighting_entropy: float = 0.1,
+                 weighting_vf: float = 1.,
                  # TODO: clean up args... with proper imports!
                  ):
 
@@ -30,6 +32,8 @@ class ProximalPolicyOptimization:
         self.gamma = discount_factor
         self.batch_size = batch_size
         self.epsilon = epsilon
+        self.h = weighting_entropy
+        self.vf = weighting_vf
 
         self.losses = []
 
@@ -130,7 +134,6 @@ class ProximalPolicyOptimization:
                             extra = (target_state_val, advantage)
                             augmented_obs = obs_temp[t] + extra
                             #print('Augmented tuple:', augmented_obs)
-                            #exit()  # TODO: take out again
 
                             # Add all parallel agents' individual observations to overall observations list
                             for i in range(self.parallel_agents):
@@ -192,7 +195,7 @@ class ProximalPolicyOptimization:
                     L_V = self.L_VF(state_val, target_state_val_)
 
                     # L^{CLIP + H + V} = L^{CLIP} + L^{ENTROPY} + L^{V}
-                    loss = - L_CLIP - L_ENTROPY + L_V
+                    loss = - L_CLIP - self.h * L_ENTROPY + self.vf * L_V
 
                     # Backprop loss
                     loss.backward()
