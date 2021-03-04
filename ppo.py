@@ -106,24 +106,31 @@ class ProximalPolicyOptimization:
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
                         last_state = obs_temp[-1][3]
-                        target_state_val = self.val_net(last_state)  # V(s_T)
+                        target_state_val = self.val_net(last_state).squeeze()  # V(s_T)
+                        #print('V(s_T):\n', target_state_val)
 
                         # Compute the target state value and advantage estimate for each state in agent's trajectory
                         # (batch-wise for all parallel agents in parallel)
                         for t in range(len(obs_temp)-1, -1, -1):
+                            #print('t:', t, 'len obs_temp:', len(obs_temp))
+                            # TODO: something is going wrong here when computing target_state_val!!!
                             # Compute target state value:
                             # V^{target}_t = r_t + \gamma * r_{t+1} + ... + \gamma^{n-1} * r_{t+n-1} + \gamma^n * V(s_{t+n}), where t+n=T
+                            #print('obs_temp[t][2]:\n', obs_temp[t][2])
                             target_state_val = obs_temp[t][2] + self.gamma * target_state_val
+                            #print('target_state_val:\n', target_state_val)
 
                             # Compute advantage estimate
-                            state_val = self.val_net(obs_temp[t][0])
+                            state_val = self.val_net(obs_temp[t][0]).squeeze()
                             advantage = target_state_val - state_val
+                            #print('state_val:\n', state_val)
+                            #print('advantage:\n', advantage)
 
                             # Augment previously observed observation tuples
                             extra = (target_state_val, advantage)
                             augmented_obs = obs_temp[t] + extra
-                            print('Augmented tuple:', augmented_obs)
-                            exit()
+                            #print('Augmented tuple:', augmented_obs)
+                            #exit()  # TODO: take out again
 
                             # Add all parallel agents' individual observations to overall observations list
                             for i in range(self.parallel_agents):
@@ -163,13 +170,13 @@ class ProximalPolicyOptimization:
                     target_state_val_ = torch.vstack(target_state_val)
                     advantage_ = torch.vstack(advantage)
 
-                    print('Comparison:\n state:\n', state, '\nstate_:\n', state_, '\naction:\n', action, '\naction_:\n',
-                          action_, '\nadvantage:\n', advantage, '\nadvantage_:\n', advantage_)
+                    #print('Comparison:\n state:\n', state, '\nstate_:\n', state_, '\naction:\n', action, '\naction_:\n',
+                    #      action_, '\nadvantage:\n', advantage, '\nadvantage_:\n', advantage_)
 
                     # Compute log_prob of action(s)
                     _ = self.policy(state_)
                     log_prob = self.policy.log_prob(action_)
-                    print('Dim log_prob:', log_prob.shape)
+                    #print('Dim log_prob:', log_prob.shape)
 
                     # Compute current state value estimates
                     state_val = self.val_net(state_)
@@ -195,8 +202,8 @@ class ProximalPolicyOptimization:
                     self.optimizer_v.step()
 
                     # Document loss
-                    print('Loss:', loss, loss.data[0], loss.numpy())
-                    self.losses.append(loss.data[0])
+                    print('Loss:', loss.detach().numpy())
+                    self.losses.append(loss.detach().numpy())
 
 
     def ratio(self, numerator, denominator):
@@ -206,13 +213,13 @@ class ProximalPolicyOptimization:
     def L_CLIP(self, log_prob, log_prob_old, advantage):
         # Computes PPO's main objective L^{CLIP}
 
-        print('log_prob:', log_prob)
-        print('log_prob_old:', log_prob_old)
+        #print('log_prob:', log_prob)
+        #print('log_prob_old:', log_prob_old)
 
         prob_ratio = self.ratio(numerator=log_prob, denominator=log_prob_old)
 
-        print('prob_ratio:', prob_ratio)
-        print('advantage:', advantage)
+        #print('prob_ratio:', prob_ratio)
+        #print('advantage:', advantage)
 
         unclipped = prob_ratio * advantage
         clipped = torch.clip_(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
