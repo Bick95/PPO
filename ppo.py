@@ -9,18 +9,18 @@ class ProximalPolicyOptimization:
 
     def __init__(self,
                  env: gym.Env or str,
-                 epochs: int = 10,
-                 total_num_state_transitions: int = 100000,
-                 parallel_agents: int = 8,
+                 epochs: int = 5,
+                 total_num_state_transitions: int = 1000000,
+                 parallel_agents: int = 32,
                  param_sharing: bool = True,
-                 learning_rate: float = 0.0001,
-                 trajectory_length: int = 1000,
-                 discount_factor: float = 0.95,
-                 batch_size: int = 64,
+                 learning_rate: float = 0.00001,
+                 trajectory_length: int = 250,
+                 discount_factor: float = 0.99,
+                 batch_size: int = 32,
                  clipping_constant: float = 0.2,
                  feedback_frequency: int = 5,
-                 weighting_entropy: float = 0.2,
-                 weighting_vf: float = 1.,
+                 weighting_entropy: float = 0.15,
+                 weighting_vf: float = .9,
                  # TODO: clean up args... with proper imports!
                  ):
 
@@ -66,7 +66,7 @@ class ProximalPolicyOptimization:
 
     def learn(self):
         print('Initial demo:')
-        #self.demo(time_steps=1000, render=True)
+        self.demo(time_steps=10000, render=False)
 
         for iteration in range(self.iterations):
             print('Iteration:', iteration)
@@ -113,20 +113,10 @@ class ProximalPolicyOptimization:
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
                         last_state = obs_temp[-1][3]
-                        target_state_val = self.val_net(last_state).squeeze()  # V(s_T) # TODO: set 0 where terminal
-                        print('(optimistic)\tV(s_T):\n', target_state_val)
-
-                        # Set valuations of terminal states to 0
-                        print('Terminal -2 :', obs_temp[-2][4])
-                        print('Terminal -1 :', obs_temp[-1][4])
-                        print('Terminal -b :', obs_temp[-1][4].int())
-                        print('Terminal -i :', 1 - obs_temp[-1][4].int())
-
-
-                        termination_mask = 1 - obs_temp[-1][4].int()
+                        target_state_val = self.val_net(last_state).squeeze()  # V(s_T)
+                        termination_mask = 1 - obs_temp[-1][4].int()  # Only associate last observed states with valuation unequal 0 if they are non-terminal
                         target_state_val = target_state_val * termination_mask
-
-                        print('(pessimistic)\tV(s_T):\n', target_state_val)
+                        #print('(pessimistic)\tV(s_T):\n', target_state_val)
 
                         # Compute the target state value and advantage estimate for each state in agent's trajectory
                         # (batch-wise for all parallel agents in parallel)
@@ -224,6 +214,7 @@ class ProximalPolicyOptimization:
             print('Average epoch loss of current iteration:', (self.losses[-1]/self.epochs))
             print("Current iteration's demo:")
             self.demo()
+            print()
 
         self.env.close()
         print('Final demo:')
@@ -231,8 +222,9 @@ class ProximalPolicyOptimization:
         self.demo(time_steps=10000, render=True)
 
 
-    def ratio(self, numerator, denominator):
-        return numerator / denominator
+    # TODO: bugfix
+    def ratio(self, log_numerator, log_denominator):
+        return torch.exp_(log_numerator - log_denominator)  # Computes probability ratio: pi(a|s) / pi_{old}(a|s)
 
 
     def L_CLIP(self, log_prob, log_prob_old, advantage):
@@ -241,7 +233,7 @@ class ProximalPolicyOptimization:
         #print('log_prob:', log_prob)
         #print('log_prob_old:', log_prob_old)
 
-        prob_ratio = self.ratio(numerator=log_prob, denominator=log_prob_old)
+        prob_ratio = self.ratio(log_numerator=log_prob, log_denominator=log_prob_old)
 
         #print('prob_ratio:', prob_ratio)
         #print('advantage:', advantage)
@@ -287,7 +279,7 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += reward
 
-                if render:
+                if render and t < 1000:
                     env.render()
 
                 if terminal_state:
