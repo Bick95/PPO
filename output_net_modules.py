@@ -1,6 +1,5 @@
 import torch.nn as nn
-import torch.nn.functional as F
-from constants import DISCRETE, CONTINUOUS
+from constants import DISCRETE
 
 
 class OutMLP(nn.Module):

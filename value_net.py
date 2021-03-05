@@ -35,7 +35,7 @@ class ValueNet(nn.Module):
         else:
             self.input_module = shared_layers
 
-        self.output_module = OutMLP(hidden_features=50,
+        self.output_module = OutMLP(input_features=50,
                                     output_features=1,
                                     output_type=CONTINUOUS
                                     )
