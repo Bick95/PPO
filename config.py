@@ -1,5 +1,5 @@
 {
-    "env": "CartPole-v1",
+    "env": "MountainCarContinuous-v0",
     "total_num_state_transitions": 5000000,
     "epochs": 10,
     "parallel_agents": 10,

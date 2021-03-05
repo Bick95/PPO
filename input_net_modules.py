@@ -4,6 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# TODO: Add RNN input module
+
+
 class InCNN(nn.Module):
 
     def __init__(self):

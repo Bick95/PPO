@@ -17,7 +17,8 @@ class Policy(nn.Module):
     def __init__(self,
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
                  observation_space: gym.Space,
-                 input_net_type: str = 'CNN'
+                 input_net_type: str = 'CNN',
+                 standard_dev=torch.ones
                  ):
 
         super(Policy, self).__init__()
@@ -26,6 +27,7 @@ class Policy(nn.Module):
         self.observation_space = observation_space
         self.action_space = action_space
         self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
+        self.std = standard_dev
 
         # Determine whether output distribution is to be Discrete or Continuous
         # NOTE!
@@ -38,10 +40,6 @@ class Policy(nn.Module):
             # Assumption: no flattening needed!
             self.num_actions = action_space.shape[0]
 
-        print('Dist type:', self.dist_type)
-        print('Action space:', self.action_space)
-        print('Num actions:', self.num_actions)
-
         # Assign input layer possibly consisting of multiple internal layers; Design dependent on nature of state observations
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
             # Create CNN-NN to encode inputs
@@ -53,10 +51,6 @@ class Policy(nn.Module):
 
             # Create MLP-NN to encode inputs
             self.input_module = InMLP(input_features)  # TODO: assign config params
-
-
-        print('Observation space:', self.observation_space)
-        print('Input features:', self.observation_space.sample().shape, sum(self.observation_space.sample().shape))
 
         # Assign (deterministic) output layer for generating parameterizations of probability distributions over action space to be defined below
         self.output_module = OutMLP(input_features=50,
@@ -79,21 +73,15 @@ class Policy(nn.Module):
 
     def forward(self, x: torch.tensor):
 
-        print('Input:\n', x)
         for layer in self.pipeline:
             x = layer(x)
-            print('Modified x:\n', x)
-            print('Modified by layer\n:', layer)
-            print()
 
         if self.dist_type is DISCRETE:
             self.dist = self.prob_dist(probs=x)
         else:
-            self.dist = self.prob_dist(loc=x, scale=torch.ones(self.num_actions))  # TODO: make variable
-        print('Prob dist:\n', self.dist)
+            self.dist = self.prob_dist(loc=x, scale=self.std(self.num_actions))
 
         action = self.dist.sample()
-        print('Actions sampled:\n', action)
 
         return action
 

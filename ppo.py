@@ -1,6 +1,7 @@
 import gym
 import json
 import random
+import numpy as np
 import torch.optim
 from policy import Policy
 from value_net import ValueNet
@@ -328,8 +329,13 @@ class ProximalPolicyOptimization:
                 # Predict action
                 action = self.policy(state)
 
-                # Perform action in env
-                next_state, reward, terminal_state, _ = env.step(action.squeeze().numpy())
+                # Perform action in env (taking into consideration various input-output behaviors of Gym envs')
+                try:
+                    # Some envs require actions of format 1.0034
+                    next_state, reward, terminal_state, _ = env.step(action.squeeze().numpy())
+                except IndexError:
+                    # Some envs require actions of format [1.0034]
+                    next_state, reward, terminal_state, _ = env.step([action.squeeze().numpy()])
 
                 # Count accumulative rewards
                 total_rewards += reward
