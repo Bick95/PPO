@@ -282,14 +282,6 @@ class ProximalPolicyOptimization:
 
     def L_VF(self, state_val: torch.tensor, target_state_val: torch.tensor):
         # Loss function for state-value network. Quadratic loss between predicted and target state value
-
-        print('VF:')
-        print('state_val:\n', state_val)
-        print('target_state_val:\n', target_state_val)
-        print('Difference:\n', state_val - target_state_val)
-        print('Squared diff.:\n', ((state_val - target_state_val) ** 2))
-        print('Mean:\n', torch.mean((state_val - target_state_val) ** 2))
-
         return torch.mean((state_val - target_state_val) ** 2)
 
 
