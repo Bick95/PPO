@@ -1,4 +1,5 @@
 import gym
+import torch.nn.functional as F
 from input_net_modules import InMLP, InCNN
 from output_net_modules import OutMLP
 from constants import DISCRETE, CONTINUOUS
@@ -18,7 +19,9 @@ class Policy(nn.Module):
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
                  observation_space: gym.Space,
                  input_net_type: str = 'CNN',
-                 standard_dev=torch.ones
+                 standard_dev=torch.ones,
+                 hidden_nodes: int or list = [50, 50, 50],
+                 nonlinearity: torch.nn.functional = F.relu
                  ):
 
         super(Policy, self).__init__()
@@ -50,12 +53,14 @@ class Policy(nn.Module):
             input_features = sum(self.observation_space.sample().shape)
 
             # Create MLP-NN to encode inputs
-            self.input_module = InMLP(input_features)  # TODO: assign config params
+            self.input_module = InMLP(input_features=input_features,
+                                      hidden_nodes=hidden_nodes,
+                                      nonlinearity=nonlinearity)
 
         # Assign (deterministic) output layer for generating parameterizations of probability distributions over action space to be defined below
-        self.output_module = OutMLP(input_features=50,
+        self.output_module = OutMLP(input_features=hidden_nodes if isinstance(hidden_nodes, int) else hidden_nodes[-1],
                                     output_features=self.num_actions,
-                                    output_type=self.dist_type  # TODO: more configgs?
+                                    output_type=self.dist_type
                                     )
 
         # Assign stochastic probability distribution (generator) for sampling actions

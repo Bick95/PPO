@@ -23,6 +23,7 @@ class InCNN(nn.Module):
                                 stride=2)
         self.fc1 = nn.Linear(32 * 4 * 4, 256)
 
+
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
@@ -62,6 +63,7 @@ class InMLP(nn.Module):
             self.add_module("layer_mlp_in_" + str(i), layer)
 
         self.nonlinearity = nonlinearity
+
 
     def forward(self, x):
 
