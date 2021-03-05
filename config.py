@@ -1,3 +1,5 @@
+import torch
+import torch.nn.functional as F
 {
     "env": "MountainCarContinuous-v0",
     "total_num_state_transitions": 5000000,
@@ -14,4 +16,9 @@
     "vf_contrib_factor": .9,
     'input_net_type': 'MLP',
     'show_final_demo': True,
+    'intermediate_eval_steps': 1000,
+    'standard_dev': torch.ones,
+    'hidden_nodes_pol': [50, 50, 50],
+    'hidden_nodes_vf': [50, 50, 50],
+    'nonlinearity': F.relu
 }

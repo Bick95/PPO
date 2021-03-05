@@ -1,10 +1,10 @@
 import gym
 import json
 import random
-import numpy as np
 import torch.optim
 from policy import Policy
 from value_net import ValueNet
+import torch.nn.functional as F
 
 
 class ProximalPolicyOptimization:
@@ -25,6 +25,11 @@ class ProximalPolicyOptimization:
                  vf_contrib_factor: float = .9,
                  input_net_type: str = 'MLP',
                  show_final_demo: bool = False,
+                 intermediate_eval_steps: int = 200,
+                 standard_dev=torch.ones,
+                 hidden_nodes_pol: int or list = [50, 50, 50],
+                 hidden_nodes_vf: int or list = [50, 50, 50],
+                 nonlinearity: torch.nn.functional = F.relu
                  ):
 
         # Save variables
@@ -39,6 +44,7 @@ class ProximalPolicyOptimization:
         self.v = vf_contrib_factor              # Parameter v in paper
         self.input_net_type = input_net_type
         self.show_final_demo = show_final_demo  # Do render final demo visually or not
+        self.intermediate_eval_steps = intermediate_eval_steps
 
         # Set up documentation of training stats
         self.training_stats = {
@@ -65,14 +71,22 @@ class ProximalPolicyOptimization:
         self.action_space = env.action_space
 
         # Create policy net
-        self.policy = Policy(action_space=self.action_space, observation_space=self.observation_space, input_net_type=self.input_net_type)
+        self.policy = Policy(action_space=self.action_space,
+                             observation_space=self.observation_space,
+                             input_net_type=self.input_net_type,
+                             hidden_nodes=hidden_nodes_pol,
+                             nonlinearity=nonlinearity,
+                             standard_dev=standard_dev)
         print('Policy network:\n', self.policy)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
             self.val_net = ValueNet(shared_layers=self.policy.get_non_output_layers())
         else:
-            self.val_net = ValueNet(self.observation_space, self.input_net_type)
+            self.val_net = ValueNet(observation_space=self.observation_space,
+                                    input_net_type=self.input_net_type,
+                                    hidden_nodes=hidden_nodes_vf,
+                                    nonlinearity=nonlinearity)
         print('Value net:\n', self.val_net)
 
         # Create optimizers
@@ -208,7 +222,6 @@ class ProximalPolicyOptimization:
                     # Compute log_prob of for minibatch of actions
                     _ = self.policy(state_)
                     log_prob = self.policy.log_prob(action_)
-                    #print('Dim log_prob:', log_prob.shape)
 
                     # Compute current state value estimates
                     state_val = self.val_net(state_)
@@ -316,7 +329,10 @@ class ProximalPolicyOptimization:
         print('Saved training stats.')
 
 
-    def eval(self, time_steps: int = 200, render=False):
+    def eval(self, time_steps: int = None, render=False):
+
+        if time_steps is None:
+            time_steps = self.intermediate_eval_steps
 
         total_rewards = 0.
         total_restarts = 1.
