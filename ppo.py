@@ -176,7 +176,6 @@ class ProximalPolicyOptimization:
                     else:
                         # Trajectory continues from time step t to t+1 (for all parallel agents)
                         state = next_state
-                        print('TRAJECTORY CONTINUES')
 
             # Perform weight updates for multiple epochs on freshly collected training data stored in 'observations'
             iteration_loss = 0.
@@ -202,16 +201,12 @@ class ProximalPolicyOptimization:
                     state_ = torch.vstack(state).squeeze()      # Minibatch of states
                     action_ = torch.vstack(action).squeeze()    # Minibatch of actions
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze()
-                    target_state_val_ = torch.vstack(target_state_val).squeeze()
+                    target_state_val_ = torch.vstack(target_state_val)
                     advantage_ = torch.vstack(advantage).squeeze()
-
-                    print('Comparison:\n state:\n', state, '\nstate_:\n', state_, '\naction:\n', action, '\naction_:\n',
-                          action_, '\nadvantage:\n', advantage, '\nadvantage_:\n', advantage_)
 
                     # Compute log_prob of for minibatch of actions
                     _ = self.policy(state_)
                     log_prob = self.policy.log_prob(action_)
-                    print('LOG PROBS:', log_prob)
                     #print('Dim log_prob:', log_prob.shape)
 
                     # Compute current state value estimates
@@ -272,20 +267,10 @@ class ProximalPolicyOptimization:
     def L_CLIP(self, log_prob, log_prob_old, advantage):
         # Computes PPO's main objective L^{CLIP}
 
-        print('log_prob:', log_prob)
-        print('log_prob_old:', log_prob_old)
         prob_ratio = torch.exp(log_prob - log_prob_old) #torch.exp(log_prob) / torch.exp(log_prob_old)#torch.exp(x) #torch.sub(log_prob, log_prob_old)
-
-        print('prob_ratio:', prob_ratio)
-        print('advantage:', advantage)
 
         unclipped = prob_ratio * advantage
         clipped = torch.clip(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
-        print('UnClipped: ', unclipped)
-        print('Clipped: ', clipped)
-
-        print('Min:', torch.min(unclipped, clipped))
-        print('Mean:', torch.mean(torch.min(unclipped, clipped)))
 
         return torch.mean(torch.min(unclipped, clipped))
 
@@ -297,6 +282,14 @@ class ProximalPolicyOptimization:
 
     def L_VF(self, state_val: torch.tensor, target_state_val: torch.tensor):
         # Loss function for state-value network. Quadratic loss between predicted and target state value
+
+        print('VF:')
+        print('state_val:\n', state_val)
+        print('target_state_val:\n', target_state_val)
+        print('Difference:\n', state_val - target_state_val)
+        print('Squared diff.:\n', ((state_val - target_state_val) ** 2))
+        print('Mean:\n', torch.mean((state_val - target_state_val) ** 2))
+
         return torch.mean((state_val - target_state_val) ** 2)
 
 
