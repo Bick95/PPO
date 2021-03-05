@@ -22,18 +22,22 @@ class ProximalPolicyOptimization:
                  clipping_constant: float = 0.2,
                  entropy_contrib_factor: float = 0.15,
                  vf_contrib_factor: float = .9,
+                 input_net_type: str = 'MLP',
+                 show_final_demo: bool = False,
                  ):
 
         # Save variables
         self.epochs = epochs
         self.iterations = total_num_state_transitions // (trajectory_length * parallel_agents)
-        self.parallel_agents = parallel_agents
-        self.T = trajectory_length
+        self.parallel_agents = parallel_agents  # Parameter N in paper
+        self.T = trajectory_length              # Parameter T in paper
         self.gamma = discount_factor
         self.batch_size = batch_size
         self.epsilon = clipping_constant
-        self.h = entropy_contrib_factor
-        self.v = vf_contrib_factor
+        self.h = entropy_contrib_factor         # Parameter h in paper
+        self.v = vf_contrib_factor              # Parameter v in paper
+        self.input_net_type = input_net_type
+        self.show_final_demo = show_final_demo  # Do render final demo visually or not
 
         # Set up documentation of training stats
         self.training_stats = {
@@ -60,26 +64,27 @@ class ProximalPolicyOptimization:
         self.action_space = env.action_space
 
         # Create policy net
-        self.policy = Policy(action_space=self.action_space, observation_space=self.observation_space, input_net_type='MLP')
-        print(self.policy)
+        self.policy = Policy(action_space=self.action_space, observation_space=self.observation_space, input_net_type=self.input_net_type)
+        print('Policy network:\n', self.policy)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
             self.val_net = ValueNet(shared_layers=self.policy.get_non_output_layers())
         else:
-            self.val_net = ValueNet(self.observation_space, 'MLP')
+            self.val_net = ValueNet(self.observation_space, self.input_net_type)
 
         # Create optimizers
         self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
         self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
 
 
-        # Vectorize env for each parallel agent to get its own env
+        # Vectorize env for each parallel agent to get its own env instance
         self.env_name = env.unwrapped.spec.id
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
 
 
     def learn(self):
+        # Function to train the PPO agent
 
         # Evaluate performance of policy before training
         print('Initial demo:')
@@ -89,6 +94,8 @@ class ProximalPolicyOptimization:
 
         # Start training
         for iteration in range(self.iterations):
+            # Each iteration consists of two steps: 1. Collecting new training data; 2. Updating nets based on newly generated training data
+
             print('Iteration:', iteration)
 
             # Init data collection and storage
@@ -109,19 +116,19 @@ class ProximalPolicyOptimization:
                     # Perform action in env
                     next_state, reward, terminal_state, _ = self.env.step(action.numpy())
 
-                    # Get log-prob of chosen action (= log \pi_{\theta_{old}}(a_t|s_t) )
-                    log_prob = self.policy.log_prob(action)
-
-                    # Transform to tensor data
+                    # Transform latest observations to tensor data
                     reward = torch.tensor(reward)
                     next_state = torch.tensor(next_state)
                     terminal_state = torch.tensor(terminal_state)
 
-                    # Collect observable data
+                    # Get log-prob of chosen action (= log \pi_{\theta_{old}}(a_t|s_t) )
+                    log_prob = self.policy.log_prob(action)
+
+                    # Store observable data
                     observation = (state, action, reward, next_state, terminal_state, log_prob)
                     obs_temp.append(observation)
 
-                    # Add number of added train steps to counter
+                    # Add number of newly experienced (in parallel) state transitions to counter
                     train_steps += self.parallel_agents
 
 
@@ -149,17 +156,17 @@ class ProximalPolicyOptimization:
                             #print('target_state_val:\n', target_state_val)
 
                             # Compute advantage estimate
-                            state_val = self.val_net(obs_temp[t][0]).squeeze()
+                            state_val = self.val_net(obs_temp[t][0]).squeeze()  # V(s_t)
                             advantage = target_state_val - state_val
                             #print('state_val:\n', state_val)
                             #print('advantage:\n', advantage)
 
-                            # Augment previously observed observation tuples
+                            # Augment a previously observed observation tuple
                             extra = (target_state_val, advantage)
                             augmented_obs = obs_temp[t] + extra
                             #print('Augmented tuple:', augmented_obs)
 
-                            # Add all parallel agents' individual observations to overall observations list
+                            # Add all parallel agents' individual observations to overall (iteration's) observations list
                             for i in range(self.parallel_agents):
                                 # Create i^th agent's private observation tuple for time step t in its current trajectory
                                 # element \in {state, action, reward, next_state, terminal_state, log_prob, target_val, advantage}
@@ -170,7 +177,7 @@ class ProximalPolicyOptimization:
                         obs_temp = []
 
                     else:
-                        # Trajectory continues from time step t to t+1
+                        # Trajectory continues from time step t to t+1 (for all parallel agents)
                         state = next_state
 
             # Perform weight updates for multiple epochs on freshly collected training data stored in 'observations'
@@ -193,9 +200,9 @@ class ProximalPolicyOptimization:
                     # Get all states, actions, log_probs, target_values, and advantage_estimates from minibatch
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
-                    # Transform tuple to tensor
-                    state_ = torch.vstack(state)
-                    action_ = torch.vstack(action).squeeze()
+                    # Transform batch of tuples to batch tensor(s)
+                    state_ = torch.vstack(state)                # Minibatch of states
+                    action_ = torch.vstack(action).squeeze()    # Minibatch of actions
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze()
                     target_state_val_ = torch.vstack(target_state_val)
                     advantage_ = torch.vstack(advantage)
@@ -203,7 +210,7 @@ class ProximalPolicyOptimization:
                     #print('Comparison:\n state:\n', state, '\nstate_:\n', state_, '\naction:\n', action, '\naction_:\n',
                     #      action_, '\nadvantage:\n', advantage, '\nadvantage_:\n', advantage_)
 
-                    # Compute log_prob of action(s)
+                    # Compute log_prob of for minibatch of actions
                     _ = self.policy(state_)
                     log_prob = self.policy.log_prob(action_)
                     #print('Dim log_prob:', log_prob.shape)
@@ -211,7 +218,7 @@ class ProximalPolicyOptimization:
                     # Compute current state value estimates
                     state_val = self.val_net(state_)
 
-                    # Evaluate loss function:
+                    # Evaluate loss function first piece-wise, then combined:
                     # L^{CLIP}
                     L_CLIP = self.L_CLIP(log_prob, log_prob_old_, advantage_)
 
@@ -227,18 +234,18 @@ class ProximalPolicyOptimization:
                     # Backprop loss
                     loss.backward()
 
-                    # Perform weight update
+                    # Perform weight update for both the policy and value net
                     self.optimizer_p.step()
                     self.optimizer_v.step()
 
-                    # Document training progress
+                    # Document training progress after one weight update
                     acc_epoch_loss += loss.detach().numpy()
 
-                # Document training progress
+                # Document training progress after one full epoch of training
                 iteration_loss += acc_epoch_loss
                 self.training_stats['devel_epoch_loss'].append(acc_epoch_loss)
 
-            # Document training progress
+            # Document training progress at the end of a full iteration
             self.training_stats['devel_itera_loss'].append(iteration_loss)
             print('Average accumulated epoch loss of current iteration:', (iteration_loss/self.epochs))
             print("Current iteration's demo:")
@@ -252,8 +259,11 @@ class ProximalPolicyOptimization:
 
         # Final evaluation
         print('Final demo:')
-        input("Waiting for user confirmation...")
-        total_rewards, avg_traj_len = self.eval(time_steps=10000, render=True)
+        if self.show_final_demo:
+            input("Waiting for user confirmation...")
+            total_rewards, avg_traj_len = self.eval(time_steps=10000, render=True)
+        else:
+            total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
         self.training_stats['final_acc_reward'].append(total_rewards)
         self.training_stats['final_avg_traj_len'].append(avg_traj_len)
 

@@ -12,4 +12,6 @@
     "clipping_constant": 0.2,
     "entropy_contrib_factor": 0.15,
     "vf_contrib_factor": .9,
+    'input_net_type': 'MLP',
+    'show_final_demo': True,
 }
