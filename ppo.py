@@ -112,100 +112,66 @@ class ProximalPolicyOptimization:
             # Collect training data
             with torch.no_grad():
                 while train_steps < self.T:
-                    print('Train steps:', train_steps)
 
                     # Predict action
                     action = self.policy(state)
-                    print('Action:\n', action)
 
                     # Perform action in env
                     next_state, reward, terminal_state, _ = self.env.step(action.numpy())
-                    print('Non-Tensorfied')
-                    print('Next state:\n', next_state)
-                    print('Reward:', reward)
-                    print('Terminal state:\n', terminal_state)
 
                     # Transform latest observations to tensor data
                     reward = torch.tensor(reward)
                     next_state = torch.tensor(next_state)
                     terminal_state = torch.tensor(terminal_state)
-                    print('Tensorfied:')
-                    print('Next state:\n', next_state)
-                    print('Reward:', reward)
-                    print('Terminal state:\n', terminal_state)
 
                     # Get log-prob of chosen action (= log \pi_{\theta_{old}}(a_t|s_t) )
                     log_prob = self.policy.log_prob(action)
-                    print('Log prob:\n', log_prob)
 
                     # Store observable data
                     observation = (state, action, reward, next_state, terminal_state, log_prob)
                     obs_temp.append(observation)
-                    print('Observation:\n', observation)
-                    print('Temp obs:\n', obs_temp)
 
                     # Add number of newly experienced (in parallel) state transitions to counter
-                    print('Time steps old:', train_steps)
                     train_steps += self.parallel_agents
-                    print('Train steps new:', train_steps)
 
 
                     # Prepare for next iteration
                     if terminal_state.any() or train_steps >= self.T:
-                        print('Terminal state:\n', terminal_state)
-                        print('T exceeded?: train steps', train_steps, ' vs T: ', self.T)
                         # Reset env for case where train_steps < max_trajectory_length T
                         state = torch.tensor(self.env.reset())
-                        print('State reset:\n', state)
 
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
                         last_state = obs_temp[-1][3]
-                        print('Last state:\n', last_state)
                         target_state_val = self.val_net(last_state).squeeze()  # V(s_T)
-                        print('V(s_T) unmasked:\n', target_state_val)
                         termination_mask = 1 - obs_temp[-1][4].int().float()  # Only associate last observed states with valuation unequal 0 if they are non-terminal
-                        print('Terminal mask:\n', termination_mask)
                         target_state_val = target_state_val * termination_mask
-                        print('V(s_T) masked:\n', target_state_val)
 
                         # Compute the target state value and advantage estimate for each state in agent's trajectory
                         # (batch-wise for all parallel agents in parallel)
                         for t in range(len(obs_temp)-1, -1, -1):
-                            print('Compute target state vals, t:', t)
-                            print('Observation at time t:\n', obs_temp[t])
                             # Compute target state value:
                             # V^{target}_t = r_t + \gamma * r_{t+1} + ... + \gamma^{n-1} * r_{t+n-1} + \gamma^n * V(s_{t+n}), where t+n=T
                             #print('obs_temp[t][2]:\n', obs_temp[t][2])
                             target_state_val = obs_temp[t][2] + self.gamma * target_state_val
-                            print('Discounted target_state_val:\n', target_state_val)
 
                             # Compute advantage estimate
                             state_val = self.val_net(obs_temp[t][0]).squeeze()  # V(s_t)
                             advantage = target_state_val - state_val
-                            print('state_val:\n', state_val)
-                            print('advantage:\n', advantage)
 
                             # Augment a previously observed observation tuple
-                            print('Observation at time t:\n', obs_temp[t])
                             extra = (target_state_val, advantage)
-                            print('Extra at time t:\n', extra)
                             augmented_obs = obs_temp[t] + extra
-                            print('Augmented tuple at time t:\n', augmented_obs)
 
                             # Add all parallel agents' individual observations to overall (iteration's) observations list
                             for i in range(self.parallel_agents):
-                                print('Adding for agent i:', i)
                                 # Create i^th agent's private observation tuple for time step t in its current trajectory
                                 # element \in {state, action, reward, next_state, terminal_state, log_prob, target_val, advantage}
                                 private_tuple = tuple([element[i] for element in augmented_obs])
-                                print('Private tuple for i\'th agent:', private_tuple)
                                 observations.append(private_tuple)
-                                print('Observations:', observations)
 
                         # Empty temporary list of observations after they have been added to more persistent list of freshly collected train data
                         obs_temp = []
-                        print('NEW TRAJECTORY STARTS OR DATA COLLECTION FINISHED')
 
                     else:
                         # Trajectory continues from time step t to t+1 (for all parallel agents)
@@ -232,19 +198,20 @@ class ProximalPolicyOptimization:
                     # Get all states, actions, log_probs, target_values, and advantage_estimates from minibatch
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
-                    # Transform batch of tuples to batch tensor(s)
-                    state_ = torch.vstack(state)                # Minibatch of states
+                    # Transform batch of tuples to batch tensor(s); Apply squeezing to remove unecessary dimensions
+                    state_ = torch.vstack(state).squeeze()      # Minibatch of states
                     action_ = torch.vstack(action).squeeze()    # Minibatch of actions
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze()
-                    target_state_val_ = torch.vstack(target_state_val)
-                    advantage_ = torch.vstack(advantage)
+                    target_state_val_ = torch.vstack(target_state_val).squeeze()
+                    advantage_ = torch.vstack(advantage).squeeze()
 
-                    #print('Comparison:\n state:\n', state, '\nstate_:\n', state_, '\naction:\n', action, '\naction_:\n',
-                    #      action_, '\nadvantage:\n', advantage, '\nadvantage_:\n', advantage_)
+                    print('Comparison:\n state:\n', state, '\nstate_:\n', state_, '\naction:\n', action, '\naction_:\n',
+                          action_, '\nadvantage:\n', advantage, '\nadvantage_:\n', advantage_)
 
                     # Compute log_prob of for minibatch of actions
                     _ = self.policy(state_)
                     log_prob = self.policy.log_prob(action_)
+                    print('LOG PROBS:', log_prob)
                     #print('Dim log_prob:', log_prob.shape)
 
                     # Compute current state value estimates
@@ -305,15 +272,20 @@ class ProximalPolicyOptimization:
     def L_CLIP(self, log_prob, log_prob_old, advantage):
         # Computes PPO's main objective L^{CLIP}
 
-        #print('log_prob:', log_prob)
-        #print('log_prob_old:', log_prob_old)
+        print('log_prob:', log_prob)
+        print('log_prob_old:', log_prob_old)
         prob_ratio = torch.exp(log_prob - log_prob_old) #torch.exp(log_prob) / torch.exp(log_prob_old)#torch.exp(x) #torch.sub(log_prob, log_prob_old)
 
-        #print('prob_ratio:', prob_ratio)
-        #print('advantage:', advantage)
+        print('prob_ratio:', prob_ratio)
+        print('advantage:', advantage)
 
         unclipped = prob_ratio * advantage
         clipped = torch.clip(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
+        print('UnClipped: ', unclipped)
+        print('Clipped: ', clipped)
+
+        print('Min:', torch.min(unclipped, clipped))
+        print('Mean:', torch.mean(torch.min(unclipped, clipped)))
 
         return torch.mean(torch.min(unclipped, clipped))
 
