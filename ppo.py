@@ -275,7 +275,6 @@ class ProximalPolicyOptimization:
 
         #print('log_prob:', log_prob)
         #print('log_prob_old:', log_prob_old)
-        #x = log_prob - log_prob_old
         prob_ratio = torch.exp(log_prob - log_prob_old) #torch.exp(log_prob) / torch.exp(log_prob_old)#torch.exp(x) #torch.sub(log_prob, log_prob_old)
 
         #print('prob_ratio:', prob_ratio)
@@ -346,7 +345,7 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += reward
 
-                if render and t < 2000:
+                if render and t < min(time_steps, 2000):
                     env.render()
 
                 if terminal_state:
