@@ -1,5 +1,5 @@
 {
-    "env": "CartPole-v1",
+    "env": "AirRaid-v0",
     "total_num_state_transitions": 5000000,
     "epochs": 10,
     "parallel_agents": 10,
@@ -12,7 +12,7 @@
     "clipping_constant": 0.2,
     "entropy_contrib_factor": 0.15,
     "vf_contrib_factor": .9,
-    'input_net_type': 'MLP',
+    'input_net_type': 'CNN',
     'show_final_demo': True,
     'intermediate_eval_steps': 1000,
     #'standard_dev': torch.ones,

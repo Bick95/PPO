@@ -27,7 +27,9 @@ class ValueNet(nn.Module):
 
             if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
                 # Create CNN-NN to encode inputs
-                self.input_module = None  # TODO: InCNN
+                self.input_module = InCNN(
+                    input_sample=self.observation_space.sample(),
+                )
 
             else:
                 # Compute nr of input features for given gym env

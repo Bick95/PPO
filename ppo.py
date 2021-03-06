@@ -348,7 +348,7 @@ class ProximalPolicyOptimization:
                 try:
                     # Some envs require actions of format 1.0034
                     next_state, reward, terminal_state, _ = env.step(action.squeeze().numpy())
-                except IndexError:
+                except IndexError: #or RuntimeError:
                     # Some envs require actions of format [1.0034]
                     next_state, reward, terminal_state, _ = env.step([action.squeeze().numpy()])
 

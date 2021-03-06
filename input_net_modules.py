@@ -16,6 +16,7 @@ class InCNN(nn.Module):
                  ):
         super(InCNN, self).__init__()
 
+        print(input_sample.shape)
         data_height = input_sample.shape[0]
         data_width = input_sample.shape[1]
 
@@ -67,6 +68,8 @@ class InCNN(nn.Module):
                                               k=hidden[l]['kernel_size'],
                                               stride=hidden[l]['stride'] if 'stride' in hidden[l].keys() else 1)
 
+                data_height, data_width = int(data_height), int(data_width)
+
                 flattened_size = data_height * data_width
 
                 # Add flattening layer
@@ -93,7 +96,8 @@ class InCNN(nn.Module):
 
 
     def out_dim(self, dim_in, pad, dial, k, stride):
-        return torch.floor((dim_in + 2*pad - dial*(k-1) - 1)/stride + 1).numpy()
+        print(dim_in, pad, dial, k, stride)
+        return torch.floor(torch.tensor((dim_in + 2*pad - dial*(k-1) - 1)/stride + 1)).numpy()
 
     def forward(self, x):
 

@@ -45,7 +45,9 @@ class Policy(nn.Module):
         # Assign input layer possibly consisting of multiple internal layers; Design dependent on nature of state observations
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
             # Create CNN-NN to encode inputs
-            self.input_module = None  # TODO: InCNN
+            self.input_module = InCNN(
+                input_sample=self.observation_space.sample(),
+            )
 
         else:
             # Compute nr of input features for given gym env
