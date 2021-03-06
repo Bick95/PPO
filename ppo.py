@@ -7,6 +7,13 @@ from value_net import ValueNet
 import torch.nn.functional as F
 
 
+# TODO: Stack multiple consecutive grayscale state observations to feed them jointly into Policy and Value net as one
+#   State when working on visual inputs, i.e. when working with Atari games.
+#   Add a separate Git branch dedicated to working on Atari envs.
+
+# TODO: Adjust to work with RNN policies. Add dedicated Git branch
+
+
 class ProximalPolicyOptimization:
 
     def __init__(self,
