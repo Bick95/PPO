@@ -9,7 +9,6 @@ import torch.nn as nn
 from torch.distributions import Categorical, Normal
 
 
-# TODO: CONTINUE proof-reading/testing here!
 # TODO: ADD RNN CAPABILITY HERE
 
 

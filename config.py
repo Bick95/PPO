@@ -1,7 +1,5 @@
-import torch
-import torch.nn.functional as F
 {
-    "env": "MountainCarContinuous-v0",
+    "env": "CartPole-v1",
     "total_num_state_transitions": 5000000,
     "epochs": 10,
     "parallel_agents": 10,
@@ -17,8 +15,8 @@ import torch.nn.functional as F
     'input_net_type': 'MLP',
     'show_final_demo': True,
     'intermediate_eval_steps': 1000,
-    'standard_dev': torch.ones,
+    #'standard_dev': torch.ones,
     'hidden_nodes_pol': [50, 50, 50],
     'hidden_nodes_vf': [50, 50, 50],
-    'nonlinearity': F.relu
+    #'nonlinearity': F.relu
 }

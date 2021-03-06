@@ -77,7 +77,6 @@ class ProximalPolicyOptimization:
                              hidden_nodes=hidden_nodes_pol,
                              nonlinearity=nonlinearity,
                              standard_dev=standard_dev)
-        print('Policy network:\n', self.policy)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
@@ -87,6 +86,8 @@ class ProximalPolicyOptimization:
                                     input_net_type=self.input_net_type,
                                     hidden_nodes=hidden_nodes_vf,
                                     nonlinearity=nonlinearity)
+
+        print('Policy network:\n', self.policy)
         print('Value net:\n', self.val_net)
 
         # Create optimizers
@@ -97,8 +98,6 @@ class ProximalPolicyOptimization:
         # Vectorize env for each parallel agent to get its own env instance
         self.env_name = env.unwrapped.spec.id
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
-        print(self.env_name)
-        print(self.env)
 
 
     def learn(self):
