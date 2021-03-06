@@ -166,7 +166,6 @@ class ProximalPolicyOptimization:
                         for t in range(len(obs_temp)-1, -1, -1):
                             # Compute target state value:
                             # V^{target}_t = r_t + \gamma * r_{t+1} + ... + \gamma^{n-1} * r_{t+n-1} + \gamma^n * V(s_{t+n}), where t+n=T
-                            #print('obs_temp[t][2]:\n', obs_temp[t][2])
                             target_state_val = obs_temp[t][2] + self.gamma * target_state_val
 
                             # Compute advantage estimate

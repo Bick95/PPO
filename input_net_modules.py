@@ -16,7 +16,6 @@ class InCNN(nn.Module):
                  ):
         super(InCNN, self).__init__()
 
-        print(input_sample.shape)
         data_height = input_sample.shape[0]
         data_width = input_sample.shape[1]
 
@@ -55,7 +54,7 @@ class InCNN(nn.Module):
             elif isinstance(layer_specs, int) and isinstance(hidden[i-1], dict):
                 # Add flattening before transitioning from conv to FC
 
-                # Compute output size of conv layers
+                # Compute output size of previous conv layers
                 for l in range(i):
                     data_height = self.out_dim(dim_in=data_height,
                                                pad=hidden[l]['padding'] if 'padding' in hidden[l].keys() else 0,
@@ -70,14 +69,14 @@ class InCNN(nn.Module):
 
                 data_height, data_width = int(data_height), int(data_width)
 
-                flattened_size = data_height * data_width
+                flattened_size = data_height * data_width * hidden[i-1]['out_channels']
 
                 # Add flattening layer
                 self.pipeline.append(
                     nn.Flatten(start_dim=1)
                 )
 
-                # Add FC layer
+                # Add actual FC layer
                 self.pipeline.append(
                     nn.Linear(flattened_size, hidden[i])
                 )
@@ -101,11 +100,11 @@ class InCNN(nn.Module):
 
     def forward(self, x):
 
-        print('Input x:\n', x)
+        # Change dimensionality from (B, H, W, C) to (B, C, H, W)
+        x = x.permute(0, 3, 1, 2)
 
         for layer in self.pipeline:
             x = self.nonlinearity(layer(x))
-            print('Modified x:\n', x)
 
         return x
 

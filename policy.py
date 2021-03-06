@@ -58,8 +58,11 @@ class Policy(nn.Module):
                                       hidden_nodes=hidden_nodes,
                                       nonlinearity=nonlinearity)
 
+        # Automatically determine how many input nodes output module is gonna need to have
+        input_features_output_module = self.input_module._modules[next(reversed(self.input_module._modules))].out_features
+
         # Assign (deterministic) output layer for generating parameterizations of probability distributions over action space to be defined below
-        self.output_module = OutMLP(input_features=hidden_nodes if isinstance(hidden_nodes, int) else hidden_nodes[-1],
+        self.output_module = OutMLP(input_features=input_features_output_module,
                                     output_features=self.num_actions,
                                     output_type=self.dist_type
                                     )
