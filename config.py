@@ -1,6 +1,6 @@
 {
-    "env": "AirRaid-v0",
-    "total_num_state_transitions": 5000000,
+    "env": "BattleZone-v0",
+    "total_num_state_transitions": 50000,
     "epochs": 10,
     "parallel_agents": 10,
     "param_sharing": True,

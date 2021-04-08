@@ -36,7 +36,9 @@ class ProximalPolicyOptimization:
                  standard_dev=torch.ones,
                  hidden_nodes_pol: int or list = [50, 50, 50],
                  hidden_nodes_vf: int or list = [50, 50, 50],
-                 nonlinearity: torch.nn.functional = F.relu
+                 nonlinearity: torch.nn.functional = F.relu,
+                 markov_state_length: int = 4,                  # How many environmental state get concatenated to one state representation
+                 grayscale_transform: bool = False,              # Whether to transform RGB inputs to grayscale or not (if applicable),
                  ):
 
         # Save variables
@@ -52,6 +54,8 @@ class ProximalPolicyOptimization:
         self.input_net_type = input_net_type
         self.show_final_demo = show_final_demo  # Do render final demo visually or not
         self.intermediate_eval_steps = intermediate_eval_steps
+        self.markov_state_length = markov_state_length
+        self.grayscale_transform = grayscale_transform
 
         # Set up documentation of training stats
         self.training_stats = {
@@ -74,6 +78,7 @@ class ProximalPolicyOptimization:
         if isinstance(env, str):
             env = gym.make(env)
 
+        self.rgb = len(env.observation_space.sample().shape) > 1  # boolean - Whether input data is RGB or not
         self.observation_space = env.observation_space
         self.action_space = env.action_space
 
@@ -83,7 +88,9 @@ class ProximalPolicyOptimization:
                              input_net_type=self.input_net_type,
                              hidden_nodes=hidden_nodes_pol,
                              nonlinearity=nonlinearity,
-                             standard_dev=standard_dev)
+                             standard_dev=standard_dev,
+                             rgb=not grayscale_transform,
+                             markov_state_length=markov_state_length)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
@@ -107,14 +114,35 @@ class ProximalPolicyOptimization:
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
 
 
+    def init_markov_state(self, initial_env_state):
+        # Takes a batch of initial states as returned by gym env, and returns a batch tensor with each state being
+        # repeated a few times (as many as a common Markov state consists of)
+
+        init_markov_state = torch.cat(self.markov_state_length * [initial_env_state], dim=-1)
+
+        return init_markov_state
+
+
+    def env2markov(self, old_markov_state, new_env_state):
+        # Function to transform non-markovian environmental states into states satisfying the Markov property
+
+        new_env_state = torch.tensor(new_env_state, dtype=torch.float)
+        last_dim = new_env_state.shape[-1]  # Information how many elements in new Markov state will be reserved for new env state
+
+        # Create new markovian state by appending the new env state by relevant parts from old markovian state
+        new_markov_state = torch.cat([new_env_state, old_markov_state[..., last_dim:]], dim=-1)
+
+        return new_markov_state
+
+
     def learn(self):
         # Function to train the PPO agent
 
         # Evaluate performance of policy before training
         print('Initial demo:')
-        total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
-        self.training_stats['init_acc_reward'].append(total_rewards)
-        self.training_stats['init_avg_traj_len'].append(avg_traj_len)
+        #total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
+        #self.training_stats['init_acc_reward'].append(total_rewards)
+        #self.training_stats['init_avg_traj_len'].append(avg_traj_len)
 
         # Start training
         for iteration in range(self.iterations):
@@ -128,21 +156,25 @@ class ProximalPolicyOptimization:
             obs_temp = []
 
             # Init (parallel) envs
-            state = torch.tensor(self.env.reset())
+            state = self.init_markov_state(torch.tensor(self.env.reset(), dtype=torch.float))
 
             # Collect training data
             with torch.no_grad():
                 while train_steps < self.T:
 
+                    print("State shape: ", state.shape, type(state))
+                    #print(state)
+
                     # Predict action
                     action = self.policy(state)
+                    print('Action:', action)
 
                     # Perform action in env
                     next_state, reward, terminal_state, _ = self.env.step(action.numpy())
 
                     # Transform latest observations to tensor data
                     reward = torch.tensor(reward)
-                    next_state = torch.tensor(next_state)
+                    next_state = self.env2markov(state, next_state)
                     terminal_state = torch.tensor(terminal_state)
 
                     # Get log-prob of chosen action (= log \pi_{\theta_{old}}(a_t|s_t) )
@@ -159,7 +191,7 @@ class ProximalPolicyOptimization:
                     # Prepare for next iteration
                     if terminal_state.any() or train_steps >= self.T:
                         # Reset env for case where train_steps < max_trajectory_length T
-                        state = torch.tensor(self.env.reset())
+                        state = self.init_markov_state(torch.tensor(self.env.reset(), dtype=torch.float))
 
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
@@ -217,12 +249,20 @@ class ProximalPolicyOptimization:
                     # Get all states, actions, log_probs, target_values, and advantage_estimates from minibatch
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
+                    print("----")
+                    print(state)
+                    print(type(state))
+                    print("State shape: ", state[0].shape)
+
                     # Transform batch of tuples to batch tensor(s); Apply squeezing to remove unecessary dimensions
                     state_ = torch.vstack(state).squeeze()      # Minibatch of states
                     action_ = torch.vstack(action).squeeze()    # Minibatch of actions
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze()
                     target_state_val_ = torch.vstack(target_state_val)
                     advantage_ = torch.vstack(advantage).squeeze()
+
+                    print(state_)
+                    print("State_ shape: ", state_.shape, type(state_))
 
                     # Compute log_prob of for minibatch of actions
                     _ = self.policy(state_)
@@ -343,10 +383,14 @@ class ProximalPolicyOptimization:
         total_restarts = 1.
 
         env = gym.make(self.env_name)
-        state = torch.tensor([env.reset()], dtype=torch.float)
+        state = self.init_markov_state(torch.tensor([env.reset()], dtype=torch.float))
 
         with torch.no_grad():
             for t in range(time_steps):
+
+                print("State shape: ", state.shape, type(state))
+                #print(state)
+
                 # Predict action
                 action = self.policy(state)
 
@@ -366,9 +410,10 @@ class ProximalPolicyOptimization:
 
                 if terminal_state:
                     total_restarts += 1
-                    state = torch.tensor([env.reset()], dtype=torch.float)
+                    state = self.init_markov_state(torch.tensor([env.reset()], dtype=torch.float))
                 else:
-                    state = torch.tensor([next_state], dtype=torch.float)
+                    #state = torch.tensor([next_state], dtype=torch.float)
+                    state = self.env2markov(state, [next_state])
 
         env.close()
 

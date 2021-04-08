@@ -12,18 +12,24 @@ class InCNN(nn.Module):
     def __init__(self,
                  input_sample: np.array,
                  hidden: list = None,
-                 nonlinearity: torch.nn.functional = F.relu
+                 nonlinearity: torch.nn.functional = F.relu,
+                 rgb: bool = True,
+                 markov_state_length: int = 4,
                  ):
         super(InCNN, self).__init__()
 
         data_height = input_sample.shape[0]
         data_width = input_sample.shape[1]
 
+        # The number of input channels = nr of color channels times nr of stacked environmental states used to get one Markov state
+        color_channels  = 3 if rgb else 1  # 3|1 color channels
+        in_channels = color_channels * markov_state_length
+
         if hidden is None:
             hidden = [
                 # Dicts for conv layers
                 {
-                    'in_channels': 3,  # 3 color channels
+                    'in_channels': in_channels,
                     'out_channels': 16,  # 16 output channels = 16 filters
                     'kernel_size': 8,  # 8x8 kernel/filter size
                     'stride': 4
@@ -113,7 +119,8 @@ class InMLP(nn.Module):
     def __init__(self,
                  input_features: int,
                  hidden_nodes: int or list = [50, 50, 50],
-                 nonlinearity: torch.nn.functional = F.relu
+                 nonlinearity: torch.nn.functional = F.relu,
+                 markov_channels: int = 4,
                  ):
         super(InMLP, self).__init__()
 
@@ -122,7 +129,7 @@ class InMLP(nn.Module):
 
             # Add input layer
             nn.Linear(
-                input_features,
+                input_features * markov_channels,
                 hidden_nodes[0] if isinstance(hidden_nodes, list) else hidden_nodes
             )
 
