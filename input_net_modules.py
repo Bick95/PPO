@@ -13,17 +13,26 @@ class InCNN(nn.Module):
                  input_sample: np.array,
                  hidden: list = None,
                  nonlinearity: torch.nn.functional = F.relu,
-                 rgb: bool = True,
-                 markov_state_length: int = 4,
+                 markov_length: int = 4,
                  ):
         super(InCNN, self).__init__()
 
         data_height = input_sample.shape[0]
         data_width = input_sample.shape[1]
 
-        # The number of input channels = nr of color channels times nr of stacked environmental states used to get one Markov state
-        color_channels  = 3 if rgb else 1  # 3|1 color channels
-        in_channels = color_channels * markov_state_length
+        if len(input_sample.shape) is 3:
+            # There is a color-channel-dimension
+            color_channels = input_sample.shape[2]
+        else:
+            # There is no third dimension along which different color channels can be indexed
+            color_channels = 1
+
+        print("In InCNN model:")
+        print("Shape input sample:", input_sample.shape)
+        print("Color channels:", color_channels)
+
+        # The number of input channels = nr of color channels times nr of stacked environmental states used to get one Markov state:
+        in_channels = color_channels * markov_length
 
         if hidden is None:
             hidden = [

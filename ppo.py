@@ -37,8 +37,8 @@ class ProximalPolicyOptimization:
                  hidden_nodes_pol: int or list = [50, 50, 50],
                  hidden_nodes_vf: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_state_length: int = 4,                  # How many environmental state get concatenated to one state representation
-                 grayscale_transform: bool = False,              # Whether to transform RGB inputs to grayscale or not (if applicable),
+                 markov_length: int = 4,                  # How many environmental state get concatenated to one state representation
+                 grayscale_transform: bool = False,             # Whether to transform RGB inputs to grayscale or not (if applicable)
                  ):
 
         # Save variables
@@ -54,8 +54,8 @@ class ProximalPolicyOptimization:
         self.input_net_type = input_net_type
         self.show_final_demo = show_final_demo  # Do render final demo visually or not
         self.intermediate_eval_steps = intermediate_eval_steps
-        self.markov_state_length = markov_state_length
-        self.grayscale_transform = grayscale_transform
+        self.markov_length = markov_length
+        self.grayscale_transform = (input_net_type.lower() is "CNN" or input_net_type.lower() is "visual") and grayscale_transform
 
         # Set up documentation of training stats
         self.training_stats = {
@@ -78,7 +78,6 @@ class ProximalPolicyOptimization:
         if isinstance(env, str):
             env = gym.make(env)
 
-        self.rgb = len(env.observation_space.sample().shape) > 1  # boolean - Whether input data is RGB or not
         self.observation_space = env.observation_space
         self.action_space = env.action_space
 
@@ -89,8 +88,7 @@ class ProximalPolicyOptimization:
                              hidden_nodes=hidden_nodes_pol,
                              nonlinearity=nonlinearity,
                              standard_dev=standard_dev,
-                             rgb=not grayscale_transform,
-                             markov_state_length=markov_state_length)
+                             markov_length=markov_length)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
@@ -118,7 +116,10 @@ class ProximalPolicyOptimization:
         # Takes a batch of initial states as returned by gym env, and returns a batch tensor with each state being
         # repeated a few times (as many as a common Markov state consists of)
 
-        init_markov_state = torch.cat(self.markov_state_length * [initial_env_state], dim=-1)
+        # TODO: add optional grayscale transform
+
+        initial_env_state = torch.tensor(initial_env_state, dtype=torch.float)
+        init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)
 
         return init_markov_state
 
@@ -126,11 +127,13 @@ class ProximalPolicyOptimization:
     def env2markov(self, old_markov_state, new_env_state):
         # Function to transform non-markovian environmental states into states satisfying the Markov property
 
+        # TODO: add optional grayscale transform
+
         new_env_state = torch.tensor(new_env_state, dtype=torch.float)
         last_dim = new_env_state.shape[-1]  # Information how many elements in new Markov state will be reserved for new env state
 
         # Create new markovian state by appending the new env state by relevant parts from old markovian state
-        new_markov_state = torch.cat([new_env_state, old_markov_state[..., last_dim:]], dim=-1)
+        new_markov_state = torch.cat([new_env_state, old_markov_state[..., : -last_dim]], dim=-1)
 
         return new_markov_state
 
@@ -156,7 +159,7 @@ class ProximalPolicyOptimization:
             obs_temp = []
 
             # Init (parallel) envs
-            state = self.init_markov_state(torch.tensor(self.env.reset(), dtype=torch.float))
+            state = self.init_markov_state(self.env.reset())
 
             # Collect training data
             with torch.no_grad():
@@ -191,7 +194,7 @@ class ProximalPolicyOptimization:
                     # Prepare for next iteration
                     if terminal_state.any() or train_steps >= self.T:
                         # Reset env for case where train_steps < max_trajectory_length T
-                        state = self.init_markov_state(torch.tensor(self.env.reset(), dtype=torch.float))
+                        state = self.init_markov_state(self.env.reset())
 
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
@@ -255,7 +258,7 @@ class ProximalPolicyOptimization:
                     print("State shape: ", state[0].shape)
 
                     # Transform batch of tuples to batch tensor(s); Apply squeezing to remove unecessary dimensions
-                    state_ = torch.vstack(state).squeeze()      # Minibatch of states
+                    state_ = torch.vstack(state).squeeze()      # Minibatch of states  # FIXME !!! Stacking along wrong dimension
                     action_ = torch.vstack(action).squeeze()    # Minibatch of actions
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze()
                     target_state_val_ = torch.vstack(target_state_val)
@@ -383,7 +386,7 @@ class ProximalPolicyOptimization:
         total_restarts = 1.
 
         env = gym.make(self.env_name)
-        state = self.init_markov_state(torch.tensor([env.reset()], dtype=torch.float))
+        state = self.init_markov_state([env.reset()])
 
         with torch.no_grad():
             for t in range(time_steps):
@@ -410,7 +413,7 @@ class ProximalPolicyOptimization:
 
                 if terminal_state:
                     total_restarts += 1
-                    state = self.init_markov_state(torch.tensor([env.reset()], dtype=torch.float))
+                    state = self.init_markov_state([env.reset()])
                 else:
                     #state = torch.tensor([next_state], dtype=torch.float)
                     state = self.env2markov(state, [next_state])

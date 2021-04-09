@@ -21,8 +21,7 @@ class Policy(nn.Module):
                  standard_dev=torch.ones,
                  hidden_nodes: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
-                 rgb: bool = True,
-                 markov_state_length: int = 4,
+                 markov_length: int = 4,
                  ):
 
         super(Policy, self).__init__()
@@ -49,8 +48,7 @@ class Policy(nn.Module):
             # Create CNN-NN to encode inputs
             self.input_module = InCNN(
                 input_sample=self.observation_space.sample(),
-                rgb=rgb,
-                markov_state_length=markov_state_length,
+                markov_length=markov_length,
             )
 
         else:
