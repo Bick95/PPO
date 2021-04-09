@@ -1,6 +1,6 @@
 {
-    "env": "BattleZone-v0",
-    "total_num_state_transitions": 50000,
+    "env": "CartPole-v0",
+    "total_num_state_transitions": 500000,
     "epochs": 10,
     "parallel_agents": 10,
     "param_sharing": True,
@@ -12,7 +12,7 @@
     "clipping_constant": 0.2,
     "entropy_contrib_factor": 0.15,
     "vf_contrib_factor": .9,
-    'input_net_type': 'CNN',
+    'input_net_type': 'MLP',
     'show_final_demo': True,
     'intermediate_eval_steps': 1000,
     #'standard_dev': torch.ones,

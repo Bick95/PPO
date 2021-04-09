@@ -143,9 +143,9 @@ class ProximalPolicyOptimization:
 
         # Evaluate performance of policy before training
         print('Initial demo:')
-        #total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
-        #self.training_stats['init_acc_reward'].append(total_rewards)
-        #self.training_stats['init_avg_traj_len'].append(avg_traj_len)
+        total_rewards, avg_traj_len = self.eval(time_steps=1000, render=False)
+        self.training_stats['init_acc_reward'].append(total_rewards)
+        self.training_stats['init_avg_traj_len'].append(avg_traj_len)
 
         # Start training
         for iteration in range(self.iterations):
@@ -165,12 +165,8 @@ class ProximalPolicyOptimization:
             with torch.no_grad():
                 while train_steps < self.T:
 
-                    print("State shape: ", state.shape, type(state))
-                    #print(state)
-
                     # Predict action
                     action = self.policy(state)
-                    print('Action:', action)
 
                     # Perform action in env
                     next_state, reward, terminal_state, _ = self.env.step(action.numpy())
@@ -184,7 +180,7 @@ class ProximalPolicyOptimization:
                     log_prob = self.policy.log_prob(action)
 
                     # Store observable data
-                    observation = (state, action, reward, next_state, terminal_state, log_prob)
+                    observation = (state.unsqueeze(1), action, reward, next_state.unsqueeze(1), terminal_state, log_prob)
                     obs_temp.append(observation)
 
                     # Add number of newly experienced (in parallel) state transitions to counter
@@ -199,7 +195,7 @@ class ProximalPolicyOptimization:
                         # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
                         # Compute state value of final observed state
                         last_state = obs_temp[-1][3]
-                        target_state_val = self.val_net(last_state).squeeze()  # V(s_T)
+                        target_state_val = self.val_net(last_state.squeeze(1)).squeeze()  # V(s_T)
                         termination_mask = 1 - obs_temp[-1][4].int().float()  # Only associate last observed states with valuation unequal 0 if they are non-terminal
                         target_state_val = target_state_val * termination_mask
 
@@ -211,7 +207,7 @@ class ProximalPolicyOptimization:
                             target_state_val = obs_temp[t][2] + self.gamma * target_state_val
 
                             # Compute advantage estimate
-                            state_val = self.val_net(obs_temp[t][0]).squeeze()  # V(s_t)
+                            state_val = self.val_net(obs_temp[t][0].squeeze(1)).squeeze()  # V(s_t)
                             advantage = target_state_val - state_val
 
                             # Augment a previously observed observation tuple
@@ -252,20 +248,12 @@ class ProximalPolicyOptimization:
                     # Get all states, actions, log_probs, target_values, and advantage_estimates from minibatch
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
-                    print("----")
-                    print(state)
-                    print(type(state))
-                    print("State shape: ", state[0].shape)
-
                     # Transform batch of tuples to batch tensor(s); Apply squeezing to remove unecessary dimensions
-                    state_ = torch.vstack(state).squeeze()      # Minibatch of states  # FIXME !!! Stacking along wrong dimension
+                    state_ = torch.cat(state).squeeze()      # Minibatch of states  # FIXME !!! Stacking along wrong dimension
                     action_ = torch.vstack(action).squeeze()    # Minibatch of actions
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze()
                     target_state_val_ = torch.vstack(target_state_val)
                     advantage_ = torch.vstack(advantage).squeeze()
-
-                    print(state_)
-                    print("State_ shape: ", state_.shape, type(state_))
 
                     # Compute log_prob of for minibatch of actions
                     _ = self.policy(state_)
@@ -390,9 +378,6 @@ class ProximalPolicyOptimization:
 
         with torch.no_grad():
             for t in range(time_steps):
-
-                print("State shape: ", state.shape, type(state))
-                #print(state)
 
                 # Predict action
                 action = self.policy(state)
