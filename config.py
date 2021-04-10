@@ -1,6 +1,6 @@
 {
-    "env": "CartPole-v0",
-    "total_num_state_transitions": 500000,
+    "env": "Pendulum-v0",
+    "total_num_state_transitions": 1000000,
     "epochs": 10,
     "parallel_agents": 10,
     "param_sharing": True,

@@ -58,7 +58,8 @@ class Policy(nn.Module):
             # Create MLP-NN to encode inputs
             self.input_module = InMLP(input_features=input_features,
                                       hidden_nodes=hidden_nodes,
-                                      nonlinearity=nonlinearity)
+                                      nonlinearity=nonlinearity,
+                                      markov_length=markov_length)
 
         # Automatically determine how many input nodes output module is gonna need to have
         input_features_output_module = self.input_module._modules[next(reversed(self.input_module._modules))].out_features

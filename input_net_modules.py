@@ -129,16 +129,20 @@ class InMLP(nn.Module):
                  input_features: int,
                  hidden_nodes: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_channels: int = 4,
+                 markov_length: int = 4,
                  ):
         super(InMLP, self).__init__()
+
+        print("In InMLP:")
+        print("input_features:", input_features)
+        print("markov_channels:", markov_length)
 
         # Construct NN-processing pipeline consisting of concatenation of layers to be applied to any input
         self.pipeline = [
 
             # Add input layer
             nn.Linear(
-                input_features * markov_channels,
+                input_features * markov_length,
                 hidden_nodes[0] if isinstance(hidden_nodes, list) else hidden_nodes
             )
 

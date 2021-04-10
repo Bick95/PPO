@@ -5,6 +5,7 @@ import torch.optim
 from policy import Policy
 from value_net import ValueNet
 import torch.nn.functional as F
+from constants import DISCRETE, CONTINUOUS
 
 
 # TODO: Stack multiple consecutive grayscale state observations to feed them jointly into Policy and Value net as one
@@ -37,7 +38,7 @@ class ProximalPolicyOptimization:
                  hidden_nodes_pol: int or list = [50, 50, 50],
                  hidden_nodes_vf: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_length: int = 4,                  # How many environmental state get concatenated to one state representation
+                 markov_length: int = 1,                  # How many environmental state get concatenated to one state representation
                  grayscale_transform: bool = False,             # Whether to transform RGB inputs to grayscale or not (if applicable)
                  ):
 
@@ -80,6 +81,7 @@ class ProximalPolicyOptimization:
 
         self.observation_space = env.observation_space
         self.action_space = env.action_space
+        self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
 
         # Create policy net
         self.policy = Policy(action_space=self.action_space,
@@ -143,7 +145,7 @@ class ProximalPolicyOptimization:
 
         # Evaluate performance of policy before training
         print('Initial demo:')
-        total_rewards, avg_traj_len = self.eval(time_steps=1000, render=False)
+        total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
         self.training_stats['init_acc_reward'].append(total_rewards)
         self.training_stats['init_avg_traj_len'].append(avg_traj_len)
 
@@ -248,19 +250,34 @@ class ProximalPolicyOptimization:
                     # Get all states, actions, log_probs, target_values, and advantage_estimates from minibatch
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
-                    # Transform batch of tuples to batch tensor(s); Apply squeezing to remove unecessary dimensions
-                    state_ = torch.cat(state).squeeze()      # Minibatch of states  # FIXME !!! Stacking along wrong dimension
-                    action_ = torch.vstack(action).squeeze()    # Minibatch of actions
-                    log_prob_old_ = torch.vstack(log_prob_old).squeeze()
-                    target_state_val_ = torch.vstack(target_state_val)
+                    # Transform batch of tuples to batch tensor(s)
+                    state_ = torch.vstack(state)      # Minibatch of states
+                    target_state_val_ = torch.vstack(target_state_val).squeeze()
                     advantage_ = torch.vstack(advantage).squeeze()
+                    log_prob_old_ = torch.vstack(log_prob_old).squeeze()
+
+                    if self.dist_type == DISCRETE:
+                        action_ = torch.vstack(action).squeeze()        # Minibatch of actions
+                    else:
+                        action_ = torch.vstack(action)                  # Minibatch of actions
+
+                    #print("State_ shape:", state_.shape)
+                    #print("action_:", action_, action_.shape)
+                    #print("log_prob_old_:", log_prob_old_, log_prob_old_.shape)
+                    #print("target_state_val_:", target_state_val_, target_state_val_.shape)
+                    #print("advantage_:", advantage_, advantage_.shape)
 
                     # Compute log_prob of for minibatch of actions
                     _ = self.policy(state_)
-                    log_prob = self.policy.log_prob(action_)
+                    log_prob = self.policy.log_prob(action_).squeeze()
+
+                    #print("log_prob_old_:", log_prob_old_, log_prob_old_.shape)
+                    #print("log_prob:", log_prob, log_prob.shape)
 
                     # Compute current state value estimates
-                    state_val = self.val_net(state_)
+                    state_val = self.val_net(state_).squeeze()
+
+                    #print("state_val:", state_val)
 
                     # Evaluate loss function first piece-wise, then combined:
                     # L^{CLIP}
