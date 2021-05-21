@@ -34,7 +34,7 @@ class ProximalPolicyOptimization:
                  input_net_type: str = 'MLP',
                  show_final_demo: bool = False,
                  intermediate_eval_steps: int = 200,
-                 standard_dev=torch.ones,
+                 standard_dev=torch.ones,                           # TODO: maybe change this to log-std-dev, as done in literature
                  hidden_nodes_pol: int or list = [50, 50, 50],
                  hidden_nodes_vf: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
@@ -90,7 +90,8 @@ class ProximalPolicyOptimization:
                              hidden_nodes=hidden_nodes_pol,
                              nonlinearity=nonlinearity,
                              standard_dev=standard_dev,
-                             markov_length=markov_length)
+                             markov_length=markov_length,
+                             dist_type=self.dist_type)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
@@ -99,12 +100,13 @@ class ProximalPolicyOptimization:
             self.val_net = ValueNet(observation_space=self.observation_space,
                                     input_net_type=self.input_net_type,
                                     hidden_nodes=hidden_nodes_vf,
-                                    nonlinearity=nonlinearity)
+                                    nonlinearity=nonlinearity)              # TODO: add Markov length parameter?
 
+        print('Networks successfully created:')
         print('Policy network:\n', self.policy)
         print('Value net:\n', self.val_net)
 
-        # Create optimizers
+        # Create optimizers (for policy network and state value network respectively)
         self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
         self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
 
@@ -115,8 +117,8 @@ class ProximalPolicyOptimization:
 
 
     def init_markov_state(self, initial_env_state):
-        # Takes a batch of initial states as returned by gym env, and returns a batch tensor with each state being
-        # repeated a few times (as many as a common Markov state consists of)
+        # Takes a batch of initial states as returned by (vectorized) gym env, and returns a batch tensor with each
+        # state being repeated a few times (as many times as a Markov state consists of given self.markov_length param)
 
         # TODO: add optional grayscale transform
 
@@ -127,14 +129,17 @@ class ProximalPolicyOptimization:
 
 
     def env2markov(self, old_markov_state, new_env_state):
-        # Function to transform non-markovian environmental states into states satisfying the Markov property
+        # Function to update Markov states by dropping the oldest environmental state in Markov state and instead adding
+        # the latest environmental state observation to the Markov state representation
 
         # TODO: add optional grayscale transform
 
+        # Obtain information about the size of the portion of the Markov state to be dropped at the end
         new_env_state = torch.tensor(new_env_state, dtype=torch.float)
-        last_dim = new_env_state.shape[-1]  # Information how many elements in new Markov state will be reserved for new env state
+        last_dim = new_env_state.shape[-1]
 
-        # Create new markovian state by appending the new env state by relevant parts from old markovian state
+        # Obtain new Markov state by dropping oldest state, shifting all other states to the back, and adding latest
+        # env state observation to the front
         new_markov_state = torch.cat([new_env_state, old_markov_state[..., : -last_dim]], dim=-1)
 
         return new_markov_state
@@ -143,7 +148,7 @@ class ProximalPolicyOptimization:
     def learn(self):
         # Function to train the PPO agent
 
-        # Evaluate performance of policy before training
+        # Evaluate the initial performance of policy network before training
         print('Initial demo:')
         total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
         self.training_stats['init_acc_reward'].append(total_rewards)
@@ -151,12 +156,14 @@ class ProximalPolicyOptimization:
 
         # Start training
         for iteration in range(self.iterations):
-            # Each iteration consists of two steps: 1. Collecting new training data; 2. Updating nets based on newly generated training data
+            # Each iteration consists of two steps:
+            #   1. Collecting new training data
+            #   2. Updating nets based on newly generated training data
 
             print('Iteration:', iteration)
 
-            # Init data collection and storage
-            train_steps = 0
+            # Init data collection and storage for current iteration
+            num_observed_train_steps = 0
             observations = []
             obs_temp = []
 
@@ -165,9 +172,9 @@ class ProximalPolicyOptimization:
 
             # Collect training data
             with torch.no_grad():
-                while train_steps < self.T:
+                while num_observed_train_steps < self.T:
 
-                    # Predict action
+                    # Predict action (actually being multiple parallel ones)
                     action = self.policy(state)
 
                     # Perform action in env
@@ -175,30 +182,32 @@ class ProximalPolicyOptimization:
 
                     # Transform latest observations to tensor data
                     reward = torch.tensor(reward)
-                    next_state = self.env2markov(state, next_state)
-                    terminal_state = torch.tensor(terminal_state)
+                    next_state = self.env2markov(state, next_state)     # Note: state == Markov state, next_state == state as returned by env
+                    terminal_state = torch.tensor(terminal_state)       # Boolean indicating whether one of parallel envs has terminated or not
 
-                    # Get log-prob of chosen action (= log \pi_{\theta_{old}}(a_t|s_t) )
+                    # Get log-prob of chosen action (= log \pi_{\theta_{old}}(a_t|s_t) in accompanying report)
                     log_prob = self.policy.log_prob(action)
 
                     # Store observable data
                     observation = (state.unsqueeze(1), action, reward, next_state.unsqueeze(1), terminal_state, log_prob)
                     obs_temp.append(observation)
 
-                    # Add number of newly experienced (in parallel) state transitions to counter
-                    train_steps += self.parallel_agents
+                    # Add number of newly (in parallel) experienced state transitions to counter
+                    num_observed_train_steps += self.parallel_agents
 
 
                     # Prepare for next iteration
-                    if terminal_state.any() or train_steps >= self.T:
-                        # Reset env for case where train_steps < max_trajectory_length T
+                    if terminal_state.any() or num_observed_train_steps >= self.T:
+                        # Reset env for case where num_observed_train_steps < max_trajectory_length T (in which case a new iteration would follow)
                         state = self.init_markov_state(self.env.reset())
 
-                        # -- Add temporarily stored observations to list of all freshly collected training data, stored in 'observations' --
-                        # Compute state value of final observed state
+                        # Add temporarily stored observations (made during current iteration) to list of all freshly
+                        # observed training data collected so far for next weight update step; to be stored in 'observations':
+
+                        # Compute state value of final observed state (= V(s_T))
                         last_state = obs_temp[-1][3]
                         target_state_val = self.val_net(last_state.squeeze(1)).squeeze()  # V(s_T)
-                        termination_mask = 1 - obs_temp[-1][4].int().float()  # Only associate last observed states with valuation unequal 0 if they are non-terminal
+                        termination_mask = (1 - obs_temp[-1][4].int()).float()  # Only associate last observed state with valuation of 0 if it is terminal
                         target_state_val = target_state_val * termination_mask
 
                         # Compute the target state value and advantage estimate for each state in agent's trajectory
@@ -220,8 +229,8 @@ class ProximalPolicyOptimization:
                             for i in range(self.parallel_agents):
                                 # Create i^th agent's private observation tuple for time step t in its current trajectory
                                 # element \in {state, action, reward, next_state, terminal_state, log_prob, target_val, advantage}
-                                private_tuple = tuple([element[i] for element in augmented_obs])
-                                observations.append(private_tuple)
+                                single_agent_tuple = tuple([element[i] for element in augmented_obs])
+                                observations.append(single_agent_tuple)
 
                         # Empty temporary list of observations after they have been added to more persistent list of freshly collected train data
                         obs_temp = []
@@ -233,14 +242,14 @@ class ProximalPolicyOptimization:
             # Perform weight updates for multiple epochs on freshly collected training data stored in 'observations'
             iteration_loss = 0.
             for epoch in range(self.epochs):
-                acc_epoch_loss = 0.
+                acc_epoch_loss = 0.   # Loss accumulated over multiple minibatches during epoch
 
                 # Shuffle data
                 random.shuffle(observations)  # Shuffle in place!
 
                 # Perform weight update on each minibatch contained in shuffled observations
                 for i in range(0, len(observations), self.batch_size):
-                    # Reset all grads
+                    # Reset all gradients
                     self.optimizer_p.zero_grad()
                     self.optimizer_v.zero_grad()
 
@@ -250,7 +259,7 @@ class ProximalPolicyOptimization:
                     # Get all states, actions, log_probs, target_values, and advantage_estimates from minibatch
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
-                    # Transform batch of tuples to batch tensor(s)
+                    # Transform batch of tuples to batch tensors
                     state_ = torch.vstack(state)      # Minibatch of states
                     target_state_val_ = torch.vstack(target_state_val).squeeze()
                     advantage_ = torch.vstack(advantage).squeeze()
@@ -267,7 +276,7 @@ class ProximalPolicyOptimization:
                     #print("target_state_val_:", target_state_val_, target_state_val_.shape)
                     #print("advantage_:", advantage_, advantage_.shape)
 
-                    # Compute log_prob of for minibatch of actions
+                    # Compute log_prob for minibatch of actions
                     _ = self.policy(state_)
                     log_prob = self.policy.log_prob(action_).squeeze()
 
@@ -279,18 +288,25 @@ class ProximalPolicyOptimization:
 
                     #print("state_val:", state_val)
 
-                    # Evaluate loss function first piece-wise, then combined:
+                    # Evaluate loss function first component-wise, then combined:
                     # L^{CLIP}
                     L_CLIP = self.L_CLIP(log_prob, log_prob_old_, advantage_)
-
-                    # L^{H=Entropy}
-                    L_ENTROPY = self.L_ENTROPY()
 
                     # L^{V}
                     L_V = self.L_VF(state_val, target_state_val_)
 
-                    # L^{CLIP + H + V} = L^{CLIP} + L^{ENTROPY} + L^{V}
-                    loss = - L_CLIP - self.h * L_ENTROPY + self.v * L_V
+                    if self.dist_type == DISCRETE:
+                        # Adding entropy is only needed in discrete case, since standard deviation is fixed in continuous case
+
+                        # H (= Entropy)
+                        L_ENTROPY = self.L_ENTROPY()
+
+                        # L^{CLIP + H + V} = L^{CLIP} + h*H + v*L^{V}
+                        loss = - L_CLIP - self.h * L_ENTROPY + self.v * L_V
+
+                    else:
+                        # L^{CLIP + H + V} = L^{CLIP} + h*H + v*L^{V}
+                        loss = - L_CLIP + self.v * L_V
 
                     # Backprop loss
                     loss.backward()
@@ -308,7 +324,7 @@ class ProximalPolicyOptimization:
 
             # Document training progress at the end of a full iteration
             self.training_stats['devel_itera_loss'].append(iteration_loss)
-            print('Average accumulated epoch loss of current iteration:', (iteration_loss/self.epochs))
+            print('Average epoch loss of current iteration:', (iteration_loss/self.epochs))
             print("Current iteration's demo:")
             total_rewards, avg_traj_len = self.eval()
             self.training_stats['train_acc_reward'].append(total_rewards)
@@ -321,7 +337,7 @@ class ProximalPolicyOptimization:
         # Final evaluation
         print('Final demo:')
         if self.show_final_demo:
-            input("Waiting for user confirmation...")
+            input("Waiting for user confirmation... Hit ENTER.")
             total_rewards, avg_traj_len = self.eval(time_steps=10000, render=True)
         else:
             total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
@@ -334,7 +350,7 @@ class ProximalPolicyOptimization:
     def L_CLIP(self, log_prob, log_prob_old, advantage):
         # Computes PPO's main objective L^{CLIP}
 
-        prob_ratio = torch.exp(log_prob - log_prob_old) #torch.exp(log_prob) / torch.exp(log_prob_old)#torch.exp(x) #torch.sub(log_prob, log_prob_old)
+        prob_ratio = torch.exp(log_prob - log_prob_old)
 
         unclipped = prob_ratio * advantage
         clipped = torch.clip(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
@@ -384,6 +400,8 @@ class ProximalPolicyOptimization:
 
     def eval(self, time_steps: int = None, render=False):
 
+        # Let a single agent interact with its env for a given nr of time steps and obtain performance stats
+
         if time_steps is None:
             time_steps = self.intermediate_eval_steps
 
@@ -393,7 +411,7 @@ class ProximalPolicyOptimization:
         env = gym.make(self.env_name)
         state = self.init_markov_state([env.reset()])
 
-        with torch.no_grad():
+        with torch.no_grad():  # No need to compute gradients here
             for t in range(time_steps):
 
                 # Predict action
@@ -401,10 +419,10 @@ class ProximalPolicyOptimization:
 
                 # Perform action in env (taking into consideration various input-output behaviors of Gym envs')
                 try:
-                    # Some envs require actions of format 1.0034
+                    # Some envs require actions of format: 1.0034
                     next_state, reward, terminal_state, _ = env.step(action.squeeze().numpy())
                 except IndexError: #or RuntimeError:
-                    # Some envs require actions of format [1.0034]
+                    # Some envs require actions of format: [1.0034]
                     next_state, reward, terminal_state, _ = env.step([action.squeeze().numpy()])
 
                 # Count accumulative rewards
@@ -417,7 +435,6 @@ class ProximalPolicyOptimization:
                     total_restarts += 1
                     state = self.init_markov_state([env.reset()])
                 else:
-                    #state = torch.tensor([next_state], dtype=torch.float)
                     state = self.env2markov(state, [next_state])
 
         env.close()
@@ -425,6 +442,6 @@ class ProximalPolicyOptimization:
         avg_traj_len = time_steps / total_restarts
 
         print('Total accumulated reward over', time_steps, 'time steps:', total_rewards)
-        print('Average trajectory length in time steps:', (time_steps/total_restarts))
+        print('Average trajectory length in time steps:', avg_traj_len)
 
         return total_rewards, avg_traj_len

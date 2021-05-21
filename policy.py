@@ -15,6 +15,7 @@ from torch.distributions import Categorical, Normal
 class Policy(nn.Module):
 
     def __init__(self,
+                 dist_type: int,
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
                  observation_space: gym.Space,
                  input_net_type: str = 'CNN',
@@ -29,10 +30,10 @@ class Policy(nn.Module):
         # Save some data
         self.observation_space = observation_space
         self.action_space = action_space
-        self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
         self.std = standard_dev
 
         # Determine whether output distribution is to be Discrete or Continuous
+        self.dist_type = dist_type
         # NOTE!
         # In Continuous case, n actions may be sampled concurrently per env.
         # In Discrete case, only one action (out of n options) is sampled at a time from the action space in a given env.
@@ -52,7 +53,7 @@ class Policy(nn.Module):
             )
 
         else:
-            # Compute nr of input features for given gym env
+            # Compute nr of input features for given gym env (Assumption: no flattening needed!)
             input_features = sum(self.observation_space.sample().shape)
 
             # Create MLP-NN to encode inputs
@@ -61,7 +62,7 @@ class Policy(nn.Module):
                                       nonlinearity=nonlinearity,
                                       markov_length=markov_length)
 
-        # Automatically determine how many input nodes output module is gonna need to have
+        # Automatically determine how many input nodes the output module/layer is gonna need to have
         input_features_output_module = self.input_module._modules[next(reversed(self.input_module._modules))].out_features
 
         # Assign (deterministic) output layer for generating parameterizations of probability distributions over action space to be defined below
@@ -79,7 +80,7 @@ class Policy(nn.Module):
             self.output_module
         ]
 
-        # To be assigned later
+        # To be assigned later (during execution). Will contain parameterized distribution (one per parallel agent)
         self.dist = None  # Will contain concrete probability distributions for sampling actions
 
 

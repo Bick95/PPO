@@ -5,15 +5,14 @@ from ppo import ProximalPolicyOptimization as PPO
 
 
 # Create parser
-parser = argparse.ArgumentParser(description='Interact with an PPO agent.')
+parser = argparse.ArgumentParser(description='Train or Demo the performance of a PPO agent.')
 
 # Training
 parser.add_argument('-c', '--config_path', type=str, required=False, help='Specify path from where to load non-default config file', default='./config.py')
-# TODO for later: remove defaults when done with debugging
-parser.add_argument('-s', '--stats_path', type=str, required=False, help='Specify path where to save training stats.', default='./train_stats.json')
-parser.add_argument('-p', '--policy_net_path', type=str, required=False, help='Specify path where to save policy net.', default='./policy_model.pt')
-parser.add_argument('-v', '--value_net_path', type=str, required=False, help='Specify path where to save value net.', default='./val_net_model.pt')
-parser.add_argument('-g', '--graphic_path', type=str, required=False, help='Specify path where to save graphic/plot.', default='./traj_len_fig.png')
+parser.add_argument('-s', '--stats_path', type=str, required=False, help='Specify path where to save training stats. "-" for False.', default='./train_stats.json')
+parser.add_argument('-p', '--policy_net_path', type=str, required=False, help='Specify path where to save policy net. "-" for False.', default='./policy_model.pt')
+parser.add_argument('-v', '--value_net_path', type=str, required=False, help='Specify path where to save value net. "-" for False.', default='./val_net_model.pt')
+parser.add_argument('-g', '--graphic_path', type=str, required=False, help='Specify path where to save graphic/plot. "-" for False.', default='./traj_len_fig.png')
 
 # Demo/Eval
 parser.add_argument('-d', '--demo_path', type=str, required=False, help='Specify path from where to load policy model for demonstrating its learning outcome visually.')
@@ -35,7 +34,8 @@ def main(args):
 
     if args.demo_path:
         # Demo mode
-        print('Demo mode. Model used for running demonstration:', args.demo_path)
+
+        print('Demo mode. Model used for running a performance demonstration:', args.demo_path)
 
         ppo = PPO(env=config['env'])
         ppo.load(args.demo_path)
@@ -54,13 +54,13 @@ def main(args):
         print(train_stats)
 
         # Save as requested
-        if args.policy_net_path or args.value_net_path:
+        if args.policy_net_path != "-" or args.value_net_path  != "-":
             ppo.save(path_policy=args.policy_net_path, path_val_net=args.value_net_path)
 
-        if args.stats_path:
+        if args.stats_path != "-":
             ppo.save_train_stats(path=args.stats_path)
 
-        if args.graphic_path:
+        if args.graphic_path != "-":
             plot_avg_trajectory_len(train_stats, save_path=args.graphic_path)
 
         print('Done.')
