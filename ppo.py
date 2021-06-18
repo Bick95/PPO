@@ -368,12 +368,14 @@ class ProximalPolicyOptimization:
         return torch.mean((state_val - target_state_val) ** 2)
 
 
-    def save(self, path_policy: str = './policy_model.pt', path_val_net: str = './val_net_model.pt'):
+    def save_policy_net(self, path_policy: str = './policy_model.pt'):
         torch.save(self.policy, path_policy)
+        print('Saved policy net.')
 
-        if path_val_net is not None:
-            torch.save(self.val_net, path_val_net)
-        print('Saved model.')
+
+    def save_value_net(self, path_val_net: str = './val_net_model.pt'):
+        torch.save(self.val_net, path_val_net)
+        print('Saved value net.')
 
 
     def load(self, path_policy: str = './policy_model.pt', path_val_net: str = None, train_stats_path: str = None):
