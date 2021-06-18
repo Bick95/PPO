@@ -34,4 +34,4 @@ def plot_avg_trajectory_len(train_stats, save_path: str = './traj_len_fig.png'):
                     dpi=100,
                     bbox_inches='tight')
 
-    plt.show()
+    #plt.show()

@@ -16,7 +16,7 @@
     'show_final_demo': False,
     'intermediate_eval_steps': 100,
     #'standard_dev': torch.ones,
-    'hidden_nodes_pol': [50, 50, 50],
-    'hidden_nodes_vf': [50, 50, 50],
+    'hidden_nodes_pol': [50, 10, 50],
+    'hidden_nodes_vf': [20, 50, 50],
     #'nonlinearity': F.relu
 }

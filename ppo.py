@@ -2,6 +2,8 @@ import gym
 import json
 import random
 import torch.optim
+import numpy as np
+from PIL import Image
 from policy import Policy
 from value_net import ValueNet
 import torch.nn.functional as F
@@ -34,7 +36,7 @@ class ProximalPolicyOptimization:
                  input_net_type: str = 'MLP',
                  show_final_demo: bool = False,
                  intermediate_eval_steps: int = 200,
-                 standard_dev=torch.ones,                           # TODO: maybe change this to log-std-dev, as done in literature
+                 standard_dev=torch.ones,
                  hidden_nodes_pol: int or list = [50, 50, 50],
                  hidden_nodes_vf: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
@@ -56,7 +58,7 @@ class ProximalPolicyOptimization:
         self.show_final_demo = show_final_demo  # Do render final demo visually or not
         self.intermediate_eval_steps = intermediate_eval_steps
         self.markov_length = markov_length
-        self.grayscale_transform = (input_net_type.lower() is "CNN" or input_net_type.lower() is "visual") and grayscale_transform
+        self.grayscale_transform = (input_net_type.lower() == "CNN" or input_net_type.lower() == "visual") or grayscale_transform
 
         # Set up documentation of training stats
         self.training_stats = {
@@ -116,11 +118,17 @@ class ProximalPolicyOptimization:
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
 
 
+    def rgb2gray(self, image_batch):
+        return np.dot(image_batch[..., :3], [0.2989, 0.5870, 0.1140])
+
+
     def init_markov_state(self, initial_env_state):
         # Takes a batch of initial states as returned by (vectorized) gym env, and returns a batch tensor with each
         # state being repeated a few times (as many times as a Markov state consists of given self.markov_length param)
 
-        # TODO: add optional grayscale transform
+        if self.grayscale_transform:
+            initial_env_state = self.rgb2gray(initial_env_state)            # Convert to grayscale
+            initial_env_state = np.expand_dims(initial_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
 
         initial_env_state = torch.tensor(initial_env_state, dtype=torch.float)
         init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)
@@ -132,7 +140,9 @@ class ProximalPolicyOptimization:
         # Function to update Markov states by dropping the oldest environmental state in Markov state and instead adding
         # the latest environmental state observation to the Markov state representation
 
-        # TODO: add optional grayscale transform
+        if self.grayscale_transform:
+            new_env_state = self.rgb2gray(new_env_state)            # Convert to grayscale
+            new_env_state = np.expand_dims(new_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
 
         # Obtain information about the size of the portion of the Markov state to be dropped at the end
         new_env_state = torch.tensor(new_env_state, dtype=torch.float)
