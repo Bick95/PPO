@@ -1,9 +1,9 @@
 import os
 import ast
 import argparse
-from utils import save, get_unique_save_path
 from plot import plot_avg_trajectory_len
 from ppo import ProximalPolicyOptimization as PPO
+from utils import save, get_unique_save_path, save_ppo
 
 # Path to directory where to save all data to be saved after training
 save_dir = './train_results/' + get_unique_save_path() + '/'
@@ -55,37 +55,10 @@ def main(args):
         train_stats = ppo.learn()
 
         # Print the stats
-        print(train_stats)
+        #print(train_stats)
 
         # Save as requested
-        #if 'policy_net_path' in args.keys():
-        #    # Check if provided path exists, if not create it
-        #    if not os.path.isdir(args.policy_net_path):
-        #        os.makedirs(args.policy_net_path)
-        #    # Save policy net
-        #    ppo.save_policy_net(path_policy=args.policy_net_path)
-        save(args=args, attribute='policy_net_path', saver=ppo.save_policy_net)
-
-        if 'value_net_path' in args.keys():
-            # Check if provided path exists, if not create it
-            if not os.path.isdir(args.value_net_path):
-                os.makedirs(args.value_net_path)
-            # Save value net
-            ppo.save_value_net(path_val_net=args.value_net_path)
-
-        if 'stats_path' in args.keys():
-            # Check if provided path exists, if not create it
-            if not os.path.isdir(args.stats_path):
-                os.makedirs(args.stats_path)
-            # Save statistics
-            ppo.save_train_stats(path=args.stats_path)
-
-        if 'graphic_path' in args.keys():
-            # Check if provided path exists, if not create it
-            if not os.path.isdir(args.graphic_path):
-                os.makedirs(args.graphic_path)
-            # Save statistics
-            plot_avg_trajectory_len(train_stats, save_path=args.graphic_path)
+        save_ppo(ppo=ppo, args=args, save_dir=save_dir, train_stats=train_stats)
 
         print('Done.')
 
