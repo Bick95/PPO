@@ -1,5 +1,6 @@
 import gym
 import torch.nn.functional as F
+import numpy as np
 from input_net_modules import InMLP, InCNN
 from output_net_modules import OutMLP
 from constants import DISCRETE, CONTINUOUS
@@ -17,19 +18,17 @@ class Policy(nn.Module):
     def __init__(self,
                  dist_type: int,
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
-                 observation_space: gym.Space,
+                 observation_sample: torch.tensor,
                  input_net_type: str = 'CNN',
                  standard_dev=torch.ones,
                  hidden_nodes: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_length: int = 4,
+                 network_structure: list = None,
                  ):
 
         super(Policy, self).__init__()
 
         # Save some data
-        self.observation_space = observation_space
-        self.action_space = action_space
         self.std = standard_dev
 
         # Determine whether output distribution is to be Discrete or Continuous
@@ -39,7 +38,7 @@ class Policy(nn.Module):
         # In Discrete case, only one action (out of n options) is sampled at a time from the action space in a given env.
         # Thus, meaning of self.num_actions varies between these two output spaces/cases!
         if self.dist_type is DISCRETE:
-            self.num_actions = self.action_space.n
+            self.num_actions = action_space.n
         else:
             # Assumption: no flattening needed!
             self.num_actions = action_space.shape[0]
@@ -48,19 +47,18 @@ class Policy(nn.Module):
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
             # Create CNN-NN to encode inputs
             self.input_module = InCNN(
-                input_sample=self.observation_space.sample(),
-                markov_length=markov_length,
+                network_structure=network_structure,
+                input_sample=observation_sample,
             )
 
         else:
-            # Compute nr of input features for given gym env (Assumption: no flattening needed!)
-            input_features = sum(self.observation_space.sample().shape)
+            # Compute nr of input features for given gym env for a single batch-example (Assumption: no flattening needed!)
+            input_features = sum(observation_sample.shape)
 
             # Create MLP-NN to encode inputs
             self.input_module = InMLP(input_features=input_features,
                                       hidden_nodes=hidden_nodes,
-                                      nonlinearity=nonlinearity,
-                                      markov_length=markov_length)
+                                      nonlinearity=nonlinearity,)
 
         # Automatically determine how many input nodes the output module/layer is gonna need to have
         input_features_output_module = self.input_module._modules[next(reversed(self.input_module._modules))].out_features

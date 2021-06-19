@@ -8,6 +8,7 @@ from policy import Policy
 from value_net import ValueNet
 import torch.nn.functional as F
 from constants import DISCRETE, CONTINUOUS
+import time
 
 
 # TODO: Stack multiple consecutive grayscale state observations to feed them jointly into Policy and Value net as one
@@ -42,6 +43,7 @@ class ProximalPolicyOptimization:
                  nonlinearity: torch.nn.functional = F.relu,
                  markov_length: int = 1,                  # How many environmental state get concatenated to one state representation
                  grayscale_transform: bool = False,             # Whether to transform RGB inputs to grayscale or not (if applicable)
+                 network_structure: list = []  # Replacement for hidden parameter
                  ):
 
         # Save variables
@@ -81,28 +83,29 @@ class ProximalPolicyOptimization:
         if isinstance(env, str):
             env = gym.make(env)
 
-        self.observation_space = env.observation_space
+        self.env_name = env.unwrapped.spec.id
+        self.observation_space = env.observation_space  # TODO: take out
         self.action_space = env.action_space
         self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
 
         # Create policy net
         self.policy = Policy(action_space=self.action_space,
-                             observation_space=self.observation_space,
+                             observation_sample=self.sample_observation_space(),
                              input_net_type=self.input_net_type,
                              hidden_nodes=hidden_nodes_pol,
                              nonlinearity=nonlinearity,
                              standard_dev=standard_dev,
-                             markov_length=markov_length,
-                             dist_type=self.dist_type)
+                             dist_type=self.dist_type,
+                             network_structure=network_structure)
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
             self.val_net = ValueNet(shared_layers=self.policy.get_non_output_layers())
         else:
-            self.val_net = ValueNet(observation_space=self.observation_space,
+            self.val_net = ValueNet(observation_space=self.observation_space,  # TODO: adapt to work with samples
                                     input_net_type=self.input_net_type,
                                     hidden_nodes=hidden_nodes_vf,
-                                    nonlinearity=nonlinearity)              # TODO: add Markov length parameter?
+                                    nonlinearity=nonlinearity)
 
         print('Networks successfully created:')
         print('Policy network:\n', self.policy)
@@ -114,24 +117,44 @@ class ProximalPolicyOptimization:
 
 
         # Vectorize env for each parallel agent to get its own env instance
-        self.env_name = env.unwrapped.spec.id
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
 
 
+    def sample_observation_space(self):
+        # Returns a sample of observation/state space for a single minibatch example
+        return self.init_markov_state(np.expand_dims(gym.make(self.env_name).reset(), axis=0))[0]
+
     def rgb2gray(self, image_batch):
-        return np.dot(image_batch[..., :3], [0.2989, 0.5870, 0.1140])
+        # See Wikipedia for weighting factors corresponding to the individual color channels:
+        # https://en.wikipedia.org/wiki/Grayscale#Converting_color_to_grayscale
+        return np.dot(image_batch[..., :3], [0.2126, 0.7152, 0.0722])
 
 
     def init_markov_state(self, initial_env_state):
         # Takes a batch of initial states as returned by (vectorized) gym env, and returns a batch tensor with each
         # state being repeated a few times (as many times as a Markov state consists of given self.markov_length param)
 
+        #print("Init state (batch):", initial_env_state)
+        print("Type init state:", type(initial_env_state))
+        print("Shape init:", initial_env_state.shape)
+        #image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
+        #image.show('Title: RGB')
+        #time.sleep(5)
         if self.grayscale_transform:
             initial_env_state = self.rgb2gray(initial_env_state)            # Convert to grayscale
+            #print("Shape grayscale:", initial_env_state.shape)
+            #print("Shape grayscale[0]:", initial_env_state[0].shape)
+            #print('Type grayscale[0]:', type(initial_env_state[0]))
+            #image2 = Image.fromarray(initial_env_state[0].astype('uint8'), 'L')
+            #image2.show('Title: L')
+
             initial_env_state = np.expand_dims(initial_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
+            #print("Shape unsqueezed:", initial_env_state.shape)
 
         initial_env_state = torch.tensor(initial_env_state, dtype=torch.float)
         init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)
+        print('Size init_markov_state (after transform):', init_markov_state.size())
+        #print('init_markov_state:', init_markov_state)
 
         return init_markov_state
 
@@ -139,10 +162,25 @@ class ProximalPolicyOptimization:
     def env2markov(self, old_markov_state, new_env_state):
         # Function to update Markov states by dropping the oldest environmental state in Markov state and instead adding
         # the latest environmental state observation to the Markov state representation
+        print("Env to Markov")
+        print("Type env state:", type(new_env_state))
+        print("Shape env state:", new_env_state.shape)
+        #image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
+        #image.show('Title: RGB')
+        #time.sleep(5)
 
         if self.grayscale_transform:
             new_env_state = self.rgb2gray(new_env_state)            # Convert to grayscale
+            #image = Image.fromarray(new_env_state[0].astype('uint8'), 'L')
+            #image.show('Title: L')
+            #time.sleep(5)
             new_env_state = np.expand_dims(new_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
+
+        print('After transform:')
+        print("Shape env state:", new_env_state.shape)
+        print("Shape markov state:", old_markov_state.size())
+
+        # TODO: continue checking dimensions here...
 
         # Obtain information about the size of the portion of the Markov state to be dropped at the end
         new_env_state = torch.tensor(new_env_state, dtype=torch.float)
@@ -157,12 +195,16 @@ class ProximalPolicyOptimization:
 
     def learn(self):
         # Function to train the PPO agent
+        #print(type(gym.vector.make(id='Breakout-v0', num_envs=10, asynchronous=False).reset()))
+        #print(type(self.env.reset()))
+        #print(type(self.env))
+        #exit()
 
         # Evaluate the initial performance of policy network before training
-        print('Initial demo:')
-        total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
-        self.training_stats['init_acc_reward'].append(total_rewards)
-        self.training_stats['init_avg_traj_len'].append(avg_traj_len)
+        #print('Initial demo:')
+        #total_rewards, avg_traj_len = self.eval(time_steps=10000, render=False)
+        #self.training_stats['init_acc_reward'].append(total_rewards)
+        #self.training_stats['init_avg_traj_len'].append(avg_traj_len)
 
         # Start training
         for iteration in range(self.iterations):
@@ -421,7 +463,9 @@ class ProximalPolicyOptimization:
         total_restarts = 1.
 
         env = gym.make(self.env_name)
-        state = self.init_markov_state([env.reset()])
+        state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
+        #print("Eval state:", state.size())
+        #exit()
 
         with torch.no_grad():  # No need to compute gradients here
             for t in range(time_steps):

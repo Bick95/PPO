@@ -10,52 +10,59 @@ import torch.nn.functional as F
 class InCNN(nn.Module):
 
     def __init__(self,
-                 input_sample: np.array,
-                 hidden: list = None,
+                 input_sample: torch.tensor,
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_length: int = 4,
+                 network_structure: list = None,
                  ):
         super(InCNN, self).__init__()
 
+        # Determine dimensions of observation (input) sample
         data_height = input_sample.shape[0]
         data_width = input_sample.shape[1]
 
+        # The number of input channels = nr of color channels times nr of stacked environmental states used to get one Markov state:
         if len(input_sample.shape) is 3:
-            # There is a color-channel-dimension
-            color_channels = input_sample.shape[2]
+            # There is a color/Markov-channel-dimension
+            in_channels = input_sample.shape[2]
         else:
             # There is no third dimension along which different color channels can be indexed
-            color_channels = 1
+            in_channels = 1
 
         print("In InCNN model:")
         print("Shape input sample:", input_sample.shape)
-        print("Color channels:", color_channels)
+        print("Input sample - Height: %i, Width: %i, Color/Markov channels: %i" % (data_height, data_width, in_channels))
 
-        # The number of input channels = nr of color channels times nr of stacked environmental states used to get one Markov state:
-        in_channels = color_channels * markov_length
+        # Default setup of network
+        if network_structure is None:
 
-        if hidden is None:
-            hidden = [
+            network_structure = [
                 # Dicts for conv layers
                 {
                     'in_channels': in_channels,
-                    'out_channels': 16,  # 16 output channels = 16 filters
-                    'kernel_size': 8,  # 8x8 kernel/filter size
-                    'stride': 4
+                    'out_channels': 32,  # 16 output channels = 16 filters
+                    'kernel_size': 4,  # 8x8 kernel/filter size
+                    'stride': 1
                 },
                 {
-                    'in_channels': 16,
-                    'out_channels': 32,
-                    'kernel_size': 4,
+                    'in_channels': 32,
+                    'out_channels': 16,
+                    'kernel_size': 8,
                     'stride': 2
                 },
                 # Nr. of nodes for fully connected layers
                 256
             ]
+        else:
+            raise NotImplementedError("TODO: Implement augmentation of network structure by in_channels (+ sth else?)!")
+            # TODO: augment network structure by input channels etc.
+            # first dict element: in_channels = in_channels
+            # for each dict element:
+            #    in_channels = out_channels of previous dict element
 
+        # Set up processing pipeline (i.e. policy)
         self.pipeline = []
 
-        for i, layer_specs in enumerate(hidden):
+        for i, layer_specs in enumerate(network_structure):
             if isinstance(layer_specs, dict):
                 # Add conv layer
                 self.pipeline.append(
@@ -66,25 +73,25 @@ class InCNN(nn.Module):
                               )
                 )
 
-            elif isinstance(layer_specs, int) and isinstance(hidden[i-1], dict):
+            elif isinstance(layer_specs, int) and isinstance(network_structure[i-1], dict):
                 # Add flattening before transitioning from conv to FC
 
-                # Compute output size of previous conv layers
+                # Compute output size of previous conv layers to determine size of conv-output to be flattened
                 for l in range(i):
                     data_height = self.out_dim(dim_in=data_height,
-                                               pad=hidden[l]['padding'] if 'padding' in hidden[l].keys() else 0,
-                                               dial=hidden[l]['dilation'] if 'dilation' in hidden[l].keys() else 1,
-                                               k=hidden[l]['kernel_size'],
-                                               stride=hidden[l]['stride'] if 'stride' in hidden[l].keys() else 1)
+                                               pad=self.extract_params_from_structure(structure=network_structure, index=l, key='padding', vertical_dim=True, default=0),
+                                               dial=self.extract_params_from_structure(structure=network_structure, index=l, key='dilation', vertical_dim=True, default=1),
+                                               k=self.extract_params_from_structure(structure=network_structure, index=l, key='kernel_size', vertical_dim=True, default=4),
+                                               stride=self.extract_params_from_structure(structure=network_structure, index=l, key='stride', vertical_dim=True, default=1))
                     data_width = self.out_dim(dim_in=data_width,
-                                              pad=hidden[l]['padding'] if 'padding' in hidden[l].keys() else 0,
-                                              dial=hidden[l]['dilation'] if 'dilation' in hidden[l].keys() else 1,
-                                              k=hidden[l]['kernel_size'],
-                                              stride=hidden[l]['stride'] if 'stride' in hidden[l].keys() else 1)
+                                              pad=self.extract_params_from_structure(structure=network_structure, index=l, key='padding', vertical_dim=False, default=0),
+                                              dial=self.extract_params_from_structure(structure=network_structure, index=l, key='dilation', vertical_dim=False, default=1),
+                                              k=self.extract_params_from_structure(structure=network_structure, index=l, key='kernel_size', vertical_dim=False, default=4),
+                                              stride=self.extract_params_from_structure(structure=network_structure, index=l, key='stride', vertical_dim=False, default=1))
 
                 data_height, data_width = int(data_height), int(data_width)
 
-                flattened_size = data_height * data_width * hidden[i-1]['out_channels']
+                flattened_size = data_height * data_width * network_structure[i-1]['out_channels']
 
                 # Add flattening layer
                 self.pipeline.append(
@@ -93,13 +100,13 @@ class InCNN(nn.Module):
 
                 # Add actual FC layer
                 self.pipeline.append(
-                    nn.Linear(flattened_size, hidden[i])
+                    nn.Linear(flattened_size, network_structure[i])
                 )
 
             else:
                 # Add FC layer after a previous one has been added already
                 self.pipeline.append(
-                    nn.Linear(hidden[i-1], hidden[i])
+                    nn.Linear(network_structure[i-1], network_structure[i])
                 )
 
         # Register all layers
@@ -109,8 +116,28 @@ class InCNN(nn.Module):
         self.nonlinearity = nonlinearity
 
 
-    def out_dim(self, dim_in, pad, dial, k, stride):
-        print(dim_in, pad, dial, k, stride)
+    @staticmethod
+    def extract_params_from_structure(structure: list, index: int, key: str, vertical_dim: bool, default: int):
+        # Takes the specification of the structure of a NN and returns a requested element from it
+        if key in structure[index].keys():
+            # Requested specification is provided
+            if isinstance(structure[index][key], int):
+                # Same specification for both vertical and horizontal case
+                return structure[index][key]
+            elif isinstance(structure[index][key], tuple):
+                # Different specifications for vertical and horizontal axes respectively
+                return structure[index][key][0 if vertical_dim else 1]
+            else:
+                # Assumed different specifications for vertical and horizontal axes respectively, just not in tuple format
+                return tuple(structure[index][key])[0 if vertical_dim else 1]
+        else:
+            # Requested specification is not provided
+            return default
+
+
+    @staticmethod
+    def out_dim(dim_in, pad, dial, k, stride):
+        #print(dim_in, pad, dial, k, stride)
         return torch.floor(torch.tensor((dim_in + 2*pad - dial*(k-1) - 1)/stride + 1)).numpy()
 
     def forward(self, x):
@@ -129,7 +156,7 @@ class InMLP(nn.Module):
                  input_features: int,
                  hidden_nodes: int or list = [50, 50, 50],
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_length: int = 4,
+                 markov_length: int = 4,                    # TODO: remove this parameter. It's obsolete!
                  ):
         super(InMLP, self).__init__()
 
