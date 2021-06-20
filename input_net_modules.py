@@ -38,56 +38,52 @@ class InCNN(nn.Module):
             network_structure = [
                 # Dicts for conv layers
                 {
-                    'in_channels': in_channels,
                     'out_channels': 32,  # 16 output channels = 16 filters
                     'kernel_size': 4,  # 8x8 kernel/filter size
                     'stride': 1
                 },
                 {
-                    'in_channels': 32,
                     'out_channels': 16,
                     'kernel_size': 8,
                     'stride': 2
                 },
                 # Nr. of nodes for fully connected layers
-                256
+                256,
+                128,
             ]
-        else:
-            raise NotImplementedError("TODO: Implement augmentation of network structure by in_channels (+ sth else?)!")
-            # TODO: augment network structure by input channels etc.
-            # first dict element: in_channels = in_channels
-            # for each dict element:
-            #    in_channels = out_channels of previous dict element
 
         # Set up processing pipeline (i.e. policy)
         self.pipeline = []
 
         for i, layer_specs in enumerate(network_structure):
+
             if isinstance(layer_specs, dict):
                 # Add conv layer
                 self.pipeline.append(
-                    nn.Conv2d(in_channels=layer_specs['in_channels'],
+                    nn.Conv2d(in_channels=in_channels,
                               out_channels=layer_specs['out_channels'],
                               kernel_size=layer_specs['kernel_size'],
                               stride=layer_specs['stride']
                               )
                 )
 
-            elif isinstance(layer_specs, int) and isinstance(network_structure[i-1], dict):
-                # Add flattening before transitioning from conv to FC
+                # Compute output dimensions of newly added Conv2d layer
+                data_height = self.out_dim(dim_in=data_height,
+                                           pad=self.extract_params_from_structure(structure=network_structure, index=i, key='padding', vertical_dim=True, default=0),
+                                           dial=self.extract_params_from_structure(structure=network_structure, index=i, key='dilation', vertical_dim=True, default=1),
+                                           k=self.extract_params_from_structure(structure=network_structure, index=i, key='kernel_size', vertical_dim=True, default=4),
+                                           stride=self.extract_params_from_structure(structure=network_structure, index=i, key='stride', vertical_dim=True, default=1))
+                data_width = self.out_dim(dim_in=data_width,
+                                          pad=self.extract_params_from_structure(structure=network_structure, index=i, key='padding', vertical_dim=False, default=0),
+                                          dial=self.extract_params_from_structure(structure=network_structure, index=i, key='dilation', vertical_dim=False, default=1),
+                                          k=self.extract_params_from_structure(structure=network_structure, index=i, key='kernel_size', vertical_dim=False, default=4),
+                                          stride=self.extract_params_from_structure(structure=network_structure, index=i, key='stride', vertical_dim=False, default=1))
 
-                # Compute output size of previous conv layers to determine size of conv-output to be flattened
-                for l in range(i):
-                    data_height = self.out_dim(dim_in=data_height,
-                                               pad=self.extract_params_from_structure(structure=network_structure, index=l, key='padding', vertical_dim=True, default=0),
-                                               dial=self.extract_params_from_structure(structure=network_structure, index=l, key='dilation', vertical_dim=True, default=1),
-                                               k=self.extract_params_from_structure(structure=network_structure, index=l, key='kernel_size', vertical_dim=True, default=4),
-                                               stride=self.extract_params_from_structure(structure=network_structure, index=l, key='stride', vertical_dim=True, default=1))
-                    data_width = self.out_dim(dim_in=data_width,
-                                              pad=self.extract_params_from_structure(structure=network_structure, index=l, key='padding', vertical_dim=False, default=0),
-                                              dial=self.extract_params_from_structure(structure=network_structure, index=l, key='dilation', vertical_dim=False, default=1),
-                                              k=self.extract_params_from_structure(structure=network_structure, index=l, key='kernel_size', vertical_dim=False, default=4),
-                                              stride=self.extract_params_from_structure(structure=network_structure, index=l, key='stride', vertical_dim=False, default=1))
+                # Prepare for next iteration: this layer's nr of output channels/filters is equal to nr of next Conv2d layer's input channels
+                in_channels = layer_specs['out_channels']
+
+            elif isinstance(layer_specs, int) and isinstance(network_structure[i-1], dict):
+                # Add flattening before transitioning from Conv2d to fully connected layer
 
                 data_height, data_width = int(data_height), int(data_width)
 
@@ -104,14 +100,14 @@ class InCNN(nn.Module):
                 )
 
             else:
-                # Add FC layer after a previous one has been added already
+                # Add fully connected layer
                 self.pipeline.append(
                     nn.Linear(network_structure[i-1], network_structure[i])
                 )
 
         # Register all layers
         for i, layer in enumerate(self.pipeline):
-            self.add_module("layer_cnn_in_" + str(i), layer)
+            self.add_module("in_cnn_layer_" + str(i), layer)
 
         self.nonlinearity = nonlinearity
 
@@ -142,7 +138,7 @@ class InCNN(nn.Module):
 
     def forward(self, x):
 
-        # Change dimensionality from (B, H, W, C) to (B, C, H, W)
+        # Change dimensionality from (Batch, Height, Width, Color) to (Batch, Color, Height, Width)
         x = x.permute(0, 3, 1, 2)
 
         for layer in self.pipeline:
@@ -152,6 +148,7 @@ class InCNN(nn.Module):
 
 
 class InMLP(nn.Module):
+
     def __init__(self,
                  input_features: int,
                  hidden_nodes: int or list = [50, 50, 50],
@@ -184,7 +181,7 @@ class InMLP(nn.Module):
 
         # Register all layers
         for i, layer in enumerate(self.pipeline):
-            self.add_module("layer_mlp_in_" + str(i), layer)
+            self.add_module("in_mlp_layer_" + str(i), layer)
 
         self.nonlinearity = nonlinearity
 

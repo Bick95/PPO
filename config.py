@@ -1,7 +1,7 @@
 {
     "env": "Breakout-v0",
     'input_net_type': 'CNN', # vs 'CNN'
-    'grayscale_transform': True,
+    'grayscale_transform': False,
     'markov_length': 5,
     "total_num_state_transitions": 1000,
     "epochs": 1,
