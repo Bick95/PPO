@@ -50,6 +50,7 @@ class InCNN(nn.Module):
                 # Nr. of nodes for fully connected layers
                 256,
                 128,
+                64,
             ]
 
         # Set up processing pipeline (i.e. policy)
@@ -67,7 +68,7 @@ class InCNN(nn.Module):
                               )
                 )
 
-                # Compute output dimensions of newly added Conv2d layer
+                # Compute dimensions of output of newly added Conv2d layer
                 data_height = self.out_dim(dim_in=data_height,
                                            pad=self.extract_params_from_structure(structure=network_structure, index=i, key='padding', vertical_dim=True, default=0),
                                            dial=self.extract_params_from_structure(structure=network_structure, index=i, key='dilation', vertical_dim=True, default=1),
@@ -83,11 +84,10 @@ class InCNN(nn.Module):
                 in_channels = layer_specs['out_channels']
 
             elif isinstance(layer_specs, int) and isinstance(network_structure[i-1], dict):
-                # Add flattening before transitioning from Conv2d to fully connected layer
+                # Before adding a fully connected (FC) layer, add flattening first and then the FC layer
 
-                data_height, data_width = int(data_height), int(data_width)
-
-                flattened_size = data_height * data_width * network_structure[i-1]['out_channels']
+                # Compute layer's input size
+                flattened_size = int(data_height) * int(data_width) * network_structure[i-1]['out_channels']
 
                 # Add flattening layer
                 self.pipeline.append(
@@ -150,33 +150,34 @@ class InCNN(nn.Module):
 class InMLP(nn.Module):
 
     def __init__(self,
-                 input_features: int,
-                 hidden_nodes: int or list = [50, 50, 50],
+                 input_sample: torch.tensor,
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_length: int = 4,                    # TODO: remove this parameter. It's obsolete!
+                 network_structure: list = None,
                  ):
         super(InMLP, self).__init__()
 
+        # Compute nr of input features for given gym env for a single batch-example (Assumption: no flattening needed!)
+        input_features = input_sample.shape[-1]
+
         print("In InMLP:")
         print("input_features:", input_features)
-        print("markov_channels:", markov_length)
 
         # Construct NN-processing pipeline consisting of concatenation of layers to be applied to any input
         self.pipeline = [
 
             # Add input layer
             nn.Linear(
-                input_features * markov_length,
-                hidden_nodes[0] if isinstance(hidden_nodes, list) else hidden_nodes
+                input_features,
+                network_structure[0] if isinstance(network_structure, list) else network_structure
             )
 
         ]
 
         # Add optional hidden layers
-        if isinstance(hidden_nodes, list):
-            for i in range(1, len(hidden_nodes)):
+        if isinstance(network_structure, list):
+            for i in range(1, len(network_structure)):
                 self.pipeline.append(
-                    nn.Linear(hidden_nodes[i-1], hidden_nodes[i])
+                    nn.Linear(network_structure[i-1], network_structure[i])
                 )
 
         # Register all layers
