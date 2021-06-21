@@ -1,5 +1,6 @@
 import os
 import ast
+import torch
 import argparse
 from plot import plot_avg_trajectory_len
 from ppo import ProximalPolicyOptimization as PPO
@@ -61,6 +62,9 @@ def main(args):
         save_ppo(ppo=ppo, args=args, save_dir=save_dir, train_stats=train_stats)
 
         print('Done.')
+
+    # Clean up
+    torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":

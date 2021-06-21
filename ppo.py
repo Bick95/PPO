@@ -44,6 +44,7 @@ class ProximalPolicyOptimization:
                  grayscale_transform: bool = False,             # Whether to transform RGB inputs to grayscale or not (if applicable)
                  network_structure: list = None,  # Replacement for hidden parameter,
                  deterministic_eval: bool = False,  # Whether to compute actions stochastically or deterministically throughout evaluation
+                 resize_visual_inputs: tuple = None,
                  ):
 
         # Decide on which device to run model: CUDA/GPU vs CPU
@@ -66,9 +67,10 @@ class ProximalPolicyOptimization:
         self.show_final_demo = show_final_demo  # Do render final demo visually or not
         self.intermediate_eval_steps = intermediate_eval_steps
         self.markov_length = markov_length
-        self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") or grayscale_transform
+        self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
         self.deterministic_eval = deterministic_eval
         self.time_steps_extensive_eval = time_steps_extensive_eval
+        self.resize_visual_inputs = resize_visual_inputs
 
         # Set up documentation of training stats
         self.training_stats = {
@@ -116,7 +118,7 @@ class ProximalPolicyOptimization:
         print('Networks successfully created:')
         print('Policy network:\n', self.policy)
         print('Value net:\n', self.val_net)
-
+        exit()
         # Create optimizers (for policy network and state value network respectively)
         self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
         self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
@@ -131,35 +133,40 @@ class ProximalPolicyOptimization:
         return self.init_markov_state(np.expand_dims(gym.make(self.env_name).reset(), axis=0))[0]
 
 
-    def random_env_start(self, env, time_steps: int = 5):
+    def random_env_start(self, env):
         # Runs a given environment for a given number of time steps and returns both the env and the resulting observation
         # Actions are sampled at random, since some gym environments require sampling special actions to really kick-off the
         # simulation. Those actions are usually not the actions incidentally sampled by deterministic policies (during evaluation)
 
         # Reset environment and init Markov state
-        state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
+        last_env_state = env.reset()
+        state = self.init_markov_state(np.expand_dims(last_env_state, axis=0))
 
         total_reward = 0
-        past_actions = [0]*time_steps
+        identical_states = True
 
-        for t in range(time_steps):
-            # Select action and perform it in environment
+        while identical_states:
+            # Randomly select action and perform it in environment
             action = env.action_space.sample()
             next_state, reward, terminal_state, _ = env.step(action)
 
             if terminal_state:
                 # We experienced a terminal state during initialization phase of env.
                 # Recursive call to make sure to always return non-terminated envs.
-                return self.random_env_start(env, time_steps=time_steps)
+                return self.random_env_start(env)
 
             # Update Markov state
             state = self.env2markov(old_markov_state=state, new_env_state=np.expand_dims(next_state, axis=0))
 
+            # Check whether simulation still hasn't started producing different states
+            comparison = last_env_state == next_state
+            identical_states = comparison.all()
+
             # Book-keeping
             total_reward += reward
-            past_actions[t] = action
+            last_env_state = next_state
 
-        return env, state, past_actions, total_reward, terminal_state
+        return env, state, total_reward
 
 
     def rgb2gray(self, image_batch):
@@ -172,58 +179,77 @@ class ProximalPolicyOptimization:
         # Takes a batch of initial states as returned by (vectorized) gym env, and returns a batch tensor with each
         # state being repeated a few times (as many times as a Markov state consists of given self.markov_length param)
 
+        if self.resize_visual_inputs:
+            image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
+            resized = image.resize(self.resize_visual_inputs, Image.LANCZOS)
+            resized.show()
+            input('Confirm...0')
+            initial_env_state = np.expand_dims(np.array(resized), axis=0)
+
         #print("Init state (batch):", initial_env_state)
-        #print("Type init state:", type(initial_env_state))
-        #print("Shape init:", initial_env_state.shape)
-        #image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
-        #image.show('Title: RGB')
+        print("Type init state:", type(initial_env_state))
+        print("Shape init:", initial_env_state.shape)
+        image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
+        image.show('Title: RGB')
         #time.sleep(5)
+        input('Confirm......')
+
         if self.grayscale_transform:
             initial_env_state = self.rgb2gray(initial_env_state)            # Convert to grayscale
-            #print("Shape grayscale:", initial_env_state.shape)
+            print("Shape grayscale:", initial_env_state.shape)
             #print("Shape grayscale[0]:", initial_env_state[0].shape)
             #print('Type grayscale[0]:', type(initial_env_state[0]))
-            #image2 = Image.fromarray(initial_env_state[0].astype('uint8'), 'L')
-            #image2.show('Title: L')
+            image2 = Image.fromarray(initial_env_state[0].astype('uint8'), 'L')
+            image2.show('Title: L')
 
             initial_env_state = np.expand_dims(initial_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
-            #print("Shape unsqueezed:", initial_env_state.shape)
+            print("Shape unsqueezed:", initial_env_state.shape)
 
         initial_env_state = torch.tensor(initial_env_state, dtype=torch.float)
         init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)  #.to(self.device)
-        #print('Size init_markov_state (after transform):', init_markov_state.size())
+        print('Size init_markov_state (after transform):', init_markov_state.size())
         #print('init_markov_state:', init_markov_state)
-
+        print("Shape init_markov_state:", init_markov_state.shape)
         return init_markov_state
 
 
     def env2markov(self, old_markov_state: torch.tensor, new_env_state: np.ndarray):
         # Function to update Markov states by dropping the oldest environmental state in Markov state and instead adding
         # the latest environmental state observation to the Markov state representation
-        #print("Env to Markov")
-        #print("Type env state:", type(new_env_state))
-        #print("Shape env state:", new_env_state.shape)
-        #image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
-        #image.show('Title: RGB')
+
+        if self.resize_visual_inputs:
+            image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
+            resized = image.resize(self.resize_visual_inputs)
+            resized.show()
+            input('Confirm...')
+            new_env_state = np.expand_dims(np.array(resized), axis=0)
+
+        print("Env to Markov")
+        print("Type env state:", type(new_env_state))
+        print("Shape env state:", new_env_state.shape)
+        image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
+        image.show('Title: RGB')
         #time.sleep(5)
+        input('Confirm...')
 
         if self.grayscale_transform:
             new_env_state = self.rgb2gray(new_env_state)            # Convert to grayscale
-            #image = Image.fromarray(new_env_state[0].astype('uint8'), 'L')
-            #image.show('Title: L')
+            image = Image.fromarray(new_env_state[0].astype('uint8'), 'L')
+            image.show('Title: L')
             #time.sleep(5)
+            input('Confirm...')
             new_env_state = np.expand_dims(new_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
 
-        #print('After transform:')
-        #print("Shape env state:", new_env_state.shape)
-        #print("Shape markov state:", old_markov_state.size())
-
+        print('After transform:')
+        print("Shape env state:", new_env_state.shape)
+        print("Shape markov state:", old_markov_state.size())
+        exit()
         # Obtain information about the size of the portion of the Markov state to be dropped at the end
         new_env_state = torch.tensor(new_env_state, dtype=torch.float)  #, device=self.device)
         last_dim = new_env_state.shape[-1]
 
-        if old_markov_state.device != new_env_state.device:
-            print(old_markov_state.device, new_env_state.device)
+        #if old_markov_state.device != new_env_state.device:
+        #    print(old_markov_state.device, new_env_state.device)
 
         # Obtain new Markov state by dropping oldest state, shifting all other states to the back, and adding latest
         # env state observation to the front
@@ -490,7 +516,6 @@ class ProximalPolicyOptimization:
             json.dump(self.training_stats, outfile)
         print('Saved training stats.')
 
-
     def eval(self, time_steps: int = None, render=False):
 
         # Let a single agent interact with its env for a given nr of time steps and obtain performance stats
@@ -503,25 +528,34 @@ class ProximalPolicyOptimization:
 
         env = gym.make(self.env_name)
         if self.deterministic_eval:
-            env, state, past_actions, total_rewards, _ = self.random_env_start(env, time_steps=20)
+            env, state, total_rewards = self.random_env_start(env)
         else:
             state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
-        #print("Eval state:", state.size())
-        #exit()
+
+        last_state = state.clone()
+        sample_next_action_randomly = False
 
         with torch.no_grad():  # No need to compute gradients here
             for t in range(time_steps):
 
-                # Predict action
-                action = self.policy.forward_deterministic(state.to(self.device)) if self.deterministic_eval else self.policy(state.to(self.device))
+                # Select action
+                if sample_next_action_randomly:
+                    # If simulation is stuck, sample random action to recover simulation
+                    action = env.action_space.sample()
+                else:
+                    # Predict action using policy - Either by stochastic sampling or deterministically
+                    if self.deterministic_eval:
+                        action = self.policy.forward_deterministic(state.to(self.device)).squeeze().cpu().numpy()
+                    else:
+                        action = self.policy(state.to(self.device)).squeeze().cpu().numpy()
 
                 # Perform action in env (taking into consideration various input-output behaviors of Gym envs')
                 try:
                     # Some envs require actions of format: 1.0034
-                    next_state, reward, terminal_state, _ = env.step(action.squeeze().cpu().numpy())
-                except IndexError:  # or RuntimeError:
+                    next_state, reward, terminal_state, _ = env.step(action)
+                except IndexError:
                     # Some envs require actions of format: [1.0034]
-                    next_state, reward, terminal_state, _ = env.step([action.squeeze().cpu().numpy()])
+                    next_state, reward, terminal_state, _ = env.step([action])
 
                 # Count accumulative rewards
                 total_rewards += reward
@@ -530,15 +564,24 @@ class ProximalPolicyOptimization:
                     env.render()
                     time.sleep(0.2)
 
+                # Compute new Markov state
+                state = self.env2markov(state, np.expand_dims(next_state, axis=0))
+
                 if terminal_state:
+                    # Simulation has terminated
                     total_restarts += 1
+
                     # Reset simulation because it has terminated
                     if self.deterministic_eval:
-                        env, state, past_actions, total_rewards, _ = self.random_env_start(env, time_steps=20)
+                        env, state, total_rewards = self.random_env_start(env)
                     else:
                         state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
-                else:
-                    state = self.env2markov(state, np.expand_dims(next_state, axis=0))
+
+                # Check whether simulation is stuck
+                sample_next_action_randomly = simulation_is_stuck(last_state, state)
+
+                # Book-keeping
+                last_state = state.clone()
 
         env.close()
 
@@ -548,3 +591,10 @@ class ProximalPolicyOptimization:
         print('Average trajectory length in time steps:', avg_traj_len)
 
         return total_rewards, avg_traj_len
+
+
+def simulation_is_stuck(last_state, state):
+    # If two consecutive states are absolutely identical, then we assume the simulation to be stuck in a semi-terminal state
+    # Returns True if two states are identical, else False
+
+    return torch.eq(last_state, state).all()

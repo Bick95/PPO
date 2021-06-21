@@ -1,9 +1,10 @@
 {
     "env": "Breakout-v0",
-    'input_net_type': 'CNN', # vs 'MLP'
+    'input_net_type': 'CNN',  # vs 'MLP'
     'grayscale_transform': True,
+	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 100000,
+    "total_num_state_transitions": 800000,
     "param_sharing": True,
 
     "epochs": 5,
@@ -20,7 +21,7 @@
     
     'show_final_demo': True,
     'deterministic_eval': True,
-	'time_steps_extensive_eval': 1000,
+	'time_steps_extensive_eval': 2000,
     
     'intermediate_eval_steps': 1000,
     
@@ -29,12 +30,12 @@
         # Dicts for conv layers
 		{
 			'out_channels': 32,  # 16 output channels = 16 filters
-			'kernel_size': 4,  # 8x8 kernel/filter size
-			'stride': 1, 
+			'kernel_size': 8,  # 8x8 kernel/filter size
+			'stride': 4,
 			'padding': 0,
 		},
 		{
-			'out_channels': 32,
+			'out_channels': 64,
 			'kernel_size': (
 				4, # vertical kernel-size
 				4  # horizontal kernel-size
@@ -49,9 +50,9 @@
 			),
 		},
 		{
-			'out_channels': 16,  # 16 output channels = 16 filters
-			'kernel_size': 8,  # 8x8 kernel/filter size
-			'stride': 1, 
+			'out_channels': 64,  # 16 output channels = 16 filters
+			'kernel_size': 3,  # 8x8 kernel/filter size
+			'stride': 1,
 			'padding': 0,
 		},
 		{
@@ -61,9 +62,7 @@
 			'padding': 0,
 		},
 		# Nr. of nodes for fully connected layers
-		128,
-		64,
-		64,
+		512,
 	]			
     #'nonlinearity': F.relu
 }
