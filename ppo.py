@@ -137,14 +137,13 @@ class ProximalPolicyOptimization:
         # simulation. Those actions are usually not the actions incidentally sampled by deterministic policies (during evaluation)
 
         # Reset environment and init Markov state
-        last_env_state = env.reset()
-        state = self.init_markov_state(np.expand_dims(last_env_state, axis=0))
+        state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
 
         total_reward = 0
-        identical_states = True
+        past_actions = [0]*time_steps
 
-        while identical_states:
-            # Randomly select action and perform it in environment
+        for t in range(time_steps):
+            # Select action and perform it in environment
             action = env.action_space.sample()
             next_state, reward, terminal_state, _ = env.step(action)
 
@@ -156,20 +155,11 @@ class ProximalPolicyOptimization:
             # Update Markov state
             state = self.env2markov(old_markov_state=state, new_env_state=np.expand_dims(next_state, axis=0))
 
-            # Check whether simulation still hasn't started producing different states
-            print(type(last_env_state), type(next_state))
-            print(last_env_state.shape, next_state.shape)
-            comparison = last_env_state == next_state
-            print(type(comparison))
-            print(comparison.shape)
-            identical_states = comparison.all()
-            print(identical_states)
-
             # Book-keeping
             total_reward += reward
-            last_env_state = next_state
+            past_actions[t] = action
 
-        return env, state, total_reward
+        return env, state, past_actions, total_reward, terminal_state
 
 
     def rgb2gray(self, image_batch):
@@ -513,7 +503,7 @@ class ProximalPolicyOptimization:
 
         env = gym.make(self.env_name)
         if self.deterministic_eval:
-            env, state, total_rewards = self.random_env_start(env, time_steps=5)
+            env, state, past_actions, total_rewards, _ = self.random_env_start(env, time_steps=20)
         else:
             state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
         #print("Eval state:", state.size())
@@ -536,13 +526,17 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += reward
 
-                if render and t < min(time_steps, 2000):
+                if render and t < min(time_steps, 500):
                     env.render()
                     time.sleep(0.2)
 
                 if terminal_state:
                     total_restarts += 1
-                    state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
+                    # Reset simulation because it has terminated
+                    if self.deterministic_eval:
+                        env, state, past_actions, total_rewards, _ = self.random_env_start(env, time_steps=20)
+                    else:
+                        state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
                 else:
                     state = self.env2markov(state, np.expand_dims(next_state, axis=0))
 
