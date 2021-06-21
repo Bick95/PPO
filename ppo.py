@@ -7,6 +7,7 @@ from PIL import Image
 from policy import Policy
 from value_net import ValueNet
 import torch.nn.functional as F
+from torchvision.transforms import Resize
 from constants import DISCRETE, CONTINUOUS
 import time
 
@@ -71,6 +72,7 @@ class ProximalPolicyOptimization:
         self.deterministic_eval = deterministic_eval
         self.time_steps_extensive_eval = time_steps_extensive_eval
         self.resize_visual_inputs = resize_visual_inputs
+        self.resize_layer = Resize(size=resize_visual_inputs) if resize_visual_inputs else None
 
         # Set up documentation of training stats
         self.training_stats = {
@@ -140,7 +142,8 @@ class ProximalPolicyOptimization:
 
         # Reset environment and init Markov state
         last_env_state = env.reset()
-        state = self.init_markov_state(np.expand_dims(last_env_state, axis=0))
+        state = self.init_markov_state(np.expand_dims(last_env_state, axis=0))  # TODO: remove expand_dims ?
+        print("Init state shape::", state.shape)
 
         total_reward = 0
         identical_states = True
@@ -155,7 +158,7 @@ class ProximalPolicyOptimization:
                 # Recursive call to make sure to always return non-terminated envs.
                 return self.random_env_start(env)
 
-            # Update Markov state
+            # Update Markov state  # TODO: Move expand_dims() into init_markov_state() and env2markov() ?!?!
             state = self.env2markov(old_markov_state=state, new_env_state=np.expand_dims(next_state, axis=0))
 
             # Check whether simulation still hasn't started producing different states
@@ -166,6 +169,7 @@ class ProximalPolicyOptimization:
             total_reward += reward
             last_env_state = next_state
 
+        print("Init state shape (final)::", state.shape)
         return env, state, total_reward
 
 
@@ -175,6 +179,12 @@ class ProximalPolicyOptimization:
         return np.dot(image_batch[..., :3], [0.2126, 0.7152, 0.0722])
 
 
+    def resize(self, image):
+        image = torch.tensor(image).permute(0, 3, 1, 2)  # Required channel ordering for resizing: (Batch, Color, Height, Width)
+        return self.resize_layer(image).permute(0, 2, 3, 1).numpy()
+
+
+
     def init_markov_state(self, initial_env_state):
         # Takes a batch of initial states as returned by (vectorized) gym env, and returns a batch tensor with each
         # state being repeated a few times (as many times as a Markov state consists of given self.markov_length param)
@@ -182,9 +192,9 @@ class ProximalPolicyOptimization:
         print('initial_env_state shape:', initial_env_state.shape)
 
         if self.resize_visual_inputs:
-            image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
-            resized = image.resize(self.resize_visual_inputs, Image.LANCZOS)
-            #resized.show()
+            resized = self.resize(initial_env_state)
+            #image = Image.fromarray(resized[0].astype('uint8'), 'RGB')
+            #image.show()
             #input('Confirm...0')
             initial_env_state = np.expand_dims(np.array(resized), axis=0)
 
@@ -208,7 +218,7 @@ class ProximalPolicyOptimization:
             #print("Shape unsqueezed:", initial_env_state.shape)
 
         initial_env_state = torch.tensor(initial_env_state, dtype=torch.float)
-        init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)  #.to(self.device)
+        init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)
         #print('Size init_markov_state (after transform):', init_markov_state.size())
         #print('init_markov_state:', init_markov_state)
         #print("Shape init_markov_state:", init_markov_state.shape)
@@ -219,9 +229,17 @@ class ProximalPolicyOptimization:
         # Function to update Markov states by dropping the oldest environmental state in Markov state and instead adding
         # the latest environmental state observation to the Markov state representation
 
+        # TODO: How is expand_dims() handled in this function? Is it used consistently?
+        # TODO: Consider moving expand_dim() calls here instead of calling it in calls of env2markov()!
+        #  (Same for method above!)
+
+        print("Shape new_env_state:", new_env_state.shape)
+
+        # TODO: move this pipeline part into a separate method and share it with init_markov_state(). 
         if self.resize_visual_inputs:
-            image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
-            resized = image.resize(self.resize_visual_inputs)
+            resized = self.resize(new_env_state)
+            #image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
+            #resized = image.resize(self.resize_visual_inputs)
             #resized.show()
             #input('Confirm...')
             new_env_state = np.expand_dims(np.array(resized), axis=0)
@@ -236,7 +254,7 @@ class ProximalPolicyOptimization:
 
         if self.grayscale_transform:
             new_env_state = self.rgb2gray(new_env_state)            # Convert to grayscale
-            image = Image.fromarray(new_env_state[0].astype('uint8'), 'L')
+            #image = Image.fromarray(new_env_state[0].astype('uint8'), 'L')
             #image.show('Title: L')
             #time.sleep(5)
             #input('Confirm...')
@@ -245,13 +263,10 @@ class ProximalPolicyOptimization:
         #print('After transform:')
         #print("Shape env state:", new_env_state.shape)
         #print("Shape markov state:", old_markov_state.size())
-        #exit()
-        # Obtain information about the size of the portion of the Markov state to be dropped at the end
-        new_env_state = torch.tensor(new_env_state, dtype=torch.float)  #, device=self.device)
-        last_dim = new_env_state.shape[-1]
 
-        #if old_markov_state.device != new_env_state.device:
-        #    print(old_markov_state.device, new_env_state.device)
+        # Obtain information about the size of the portion of the Markov state to be dropped at the end
+        new_env_state = torch.tensor(new_env_state, dtype=torch.float)
+        last_dim = new_env_state.shape[-1]
 
         # Obtain new Markov state by dropping oldest state, shifting all other states to the back, and adding latest
         # env state observation to the front
@@ -534,7 +549,7 @@ class ProximalPolicyOptimization:
         if self.deterministic_eval:
             env, state, total_rewards = self.random_env_start(env)
         else:
-            state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
+            state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))  # TODO: remove expand_dims ?
 
         last_state = state.clone()
         sample_next_action_randomly = False
