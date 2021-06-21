@@ -29,35 +29,35 @@
     'network_structure': [
         # Dicts for conv layers
 		{
-			'out_channels': 32,  # 16 output channels = 16 filters
-			'kernel_size': 8,  # 8x8 kernel/filter size
+			'out_channels': 32,  # 32 output channels = 32 filters
+			'kernel_size': 8,    # 8x8 kernel/filter size
 			'stride': 4,
-			'padding': 0,
+			'padding': 'automatically preserve input size',
 		},
 		{
 			'out_channels': 64,
 			'kernel_size': (
-				4, # vertical kernel-size
-				4  # horizontal kernel-size
+				4,  # vertical kernel-size
+				4   # horizontal kernel-size
 			),
 			'stride': (
-				2, # vertical stride
-				2  # horizontal stride
+				2,  # vertical stride
+				2   # horizontal stride
 			),
 			'padding': (
-				0, # vertical padding
-				0  # horizontal padding
+				43,  # vertical padding
+				43   # horizontal padding
 			),
 		},
 		{
-			'out_channels': 64,  # 16 output channels = 16 filters
-			'kernel_size': 3,  # 8x8 kernel/filter size
+			'out_channels': 64,  # 64 output channels = 64 filters
+			'kernel_size': 3,    # 8x8 kernel/filter size
 			'stride': 1,
 			'padding': 0,
 		},
 		{
 			'out_channels': 16,  # 16 output channels = 16 filters
-			'kernel_size': 8,  # 8x8 kernel/filter size
+			'kernel_size': 8,    # 8x8 kernel/filter size
 			'stride': 2, 
 			'padding': 0,
 		},

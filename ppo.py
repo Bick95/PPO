@@ -118,7 +118,7 @@ class ProximalPolicyOptimization:
         print('Networks successfully created:')
         print('Policy network:\n', self.policy)
         print('Value net:\n', self.val_net)
-        exit()
+
         # Create optimizers (for policy network and state value network respectively)
         self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
         self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
@@ -179,37 +179,39 @@ class ProximalPolicyOptimization:
         # Takes a batch of initial states as returned by (vectorized) gym env, and returns a batch tensor with each
         # state being repeated a few times (as many times as a Markov state consists of given self.markov_length param)
 
+        print('initial_env_state shape:', initial_env_state.shape)
+
         if self.resize_visual_inputs:
             image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
             resized = image.resize(self.resize_visual_inputs, Image.LANCZOS)
-            resized.show()
-            input('Confirm...0')
+            #resized.show()
+            #input('Confirm...0')
             initial_env_state = np.expand_dims(np.array(resized), axis=0)
 
         #print("Init state (batch):", initial_env_state)
-        print("Type init state:", type(initial_env_state))
-        print("Shape init:", initial_env_state.shape)
-        image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
-        image.show('Title: RGB')
+        #print("Type init state:", type(initial_env_state))
+        #print("Shape init:", initial_env_state.shape)
+        #image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
+        #image.show('Title: RGB')
         #time.sleep(5)
-        input('Confirm......')
+        #input('Confirm......')
 
         if self.grayscale_transform:
             initial_env_state = self.rgb2gray(initial_env_state)            # Convert to grayscale
-            print("Shape grayscale:", initial_env_state.shape)
+            #print("Shape grayscale:", initial_env_state.shape)
             #print("Shape grayscale[0]:", initial_env_state[0].shape)
             #print('Type grayscale[0]:', type(initial_env_state[0]))
-            image2 = Image.fromarray(initial_env_state[0].astype('uint8'), 'L')
-            image2.show('Title: L')
+            #image2 = Image.fromarray(initial_env_state[0].astype('uint8'), 'L')
+            #image2.show('Title: L')
 
             initial_env_state = np.expand_dims(initial_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
-            print("Shape unsqueezed:", initial_env_state.shape)
+            #print("Shape unsqueezed:", initial_env_state.shape)
 
         initial_env_state = torch.tensor(initial_env_state, dtype=torch.float)
         init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)  #.to(self.device)
-        print('Size init_markov_state (after transform):', init_markov_state.size())
+        #print('Size init_markov_state (after transform):', init_markov_state.size())
         #print('init_markov_state:', init_markov_state)
-        print("Shape init_markov_state:", init_markov_state.shape)
+        #print("Shape init_markov_state:", init_markov_state.shape)
         return init_markov_state
 
 
@@ -220,30 +222,30 @@ class ProximalPolicyOptimization:
         if self.resize_visual_inputs:
             image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
             resized = image.resize(self.resize_visual_inputs)
-            resized.show()
-            input('Confirm...')
+            #resized.show()
+            #input('Confirm...')
             new_env_state = np.expand_dims(np.array(resized), axis=0)
 
-        print("Env to Markov")
-        print("Type env state:", type(new_env_state))
-        print("Shape env state:", new_env_state.shape)
-        image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
-        image.show('Title: RGB')
+        #print("Env to Markov")
+        #print("Type env state:", type(new_env_state))
+        #print("Shape env state:", new_env_state.shape)
+        #image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
+        #image.show('Title: RGB')
         #time.sleep(5)
-        input('Confirm...')
+        #input('Confirm...')
 
         if self.grayscale_transform:
             new_env_state = self.rgb2gray(new_env_state)            # Convert to grayscale
             image = Image.fromarray(new_env_state[0].astype('uint8'), 'L')
-            image.show('Title: L')
+            #image.show('Title: L')
             #time.sleep(5)
-            input('Confirm...')
+            #input('Confirm...')
             new_env_state = np.expand_dims(new_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
 
-        print('After transform:')
-        print("Shape env state:", new_env_state.shape)
-        print("Shape markov state:", old_markov_state.size())
-        exit()
+        #print('After transform:')
+        #print("Shape env state:", new_env_state.shape)
+        #print("Shape markov state:", old_markov_state.size())
+        #exit()
         # Obtain information about the size of the portion of the Markov state to be dropped at the end
         new_env_state = torch.tensor(new_env_state, dtype=torch.float)  #, device=self.device)
         last_dim = new_env_state.shape[-1]
@@ -293,6 +295,8 @@ class ProximalPolicyOptimization:
 
                     # Predict action (actually being multiple parallel ones)
                     action = self.policy(state.to(self.device)).cpu()
+                    print("State.shape:", state.shape)
+                    print('action:', action.numpy())
 
                     # Perform action in env
                     next_state, reward, terminal_state, _ = self.env.step(action.numpy())

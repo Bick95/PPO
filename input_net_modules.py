@@ -57,14 +57,21 @@ class InCNN(nn.Module):
             if isinstance(layer_specs, dict):
 
                 # Determine padding parameter
-                if isinstance(layer_specs['padding'], int) or isinstance(layer_specs['padding'], tuple):
-                    # Padding parameter is provided
+                if isinstance(layer_specs['padding'], int):
+                    # Padding parameter is provided as int
                     padding = (layer_specs['padding'], layer_specs['padding'])
 
-                elif isinstance(layer_specs['padding'], str) and 'preserve' in layer_specs['padding'].lower():
+                elif isinstance(layer_specs['padding'], tuple):
+                    # Padding parameter is provided as tuple
+                    padding = layer_specs['padding']
+
+                elif isinstance(layer_specs['padding'], str) and (
+                        'preserve' in layer_specs['padding'].lower() or
+                        'auto' in layer_specs['padding'].lower()
+                ):
                     # Padding is supposed to preserve input's size after convolution
-                    padding_vertical = size_preserving_padding(input_dim=data_height, kernel_size=layer_specs['kernel_size'], stride=layer_specs['stride'])
-                    padding_horizontal = size_preserving_padding(input_dim=data_width, kernel_size=layer_specs['kernel_size'], stride=layer_specs['stride'])
+                    padding_vertical = size_preserving_padding(i=data_height, k=layer_specs['kernel_size'], s=layer_specs['stride'])
+                    padding_horizontal = size_preserving_padding(i=data_width, k=layer_specs['kernel_size'], s=layer_specs['stride'])
                     padding = (padding_vertical, padding_horizontal)
 
                 else:
@@ -82,16 +89,16 @@ class InCNN(nn.Module):
                 )
 
                 # Compute dimensions of output of newly added Conv2d layer
-                data_height = out_dim(input_dim=data_height,
-                                      padding=padding[0],
-                                      dialation=extract_params_from_structure(structure=network_structure, index=i, key='dilation', vertical_dim=True, default=1),
-                                      kernel_size=extract_params_from_structure(structure=network_structure, index=i, key='kernel_size', vertical_dim=True, default=4),
-                                      stride=extract_params_from_structure(structure=network_structure, index=i, key='stride', vertical_dim=True, default=1))
-                data_width = out_dim(input_dim=data_width,
-                                     padding=[1],
-                                     dialation=extract_params_from_structure(structure=network_structure, index=i, key='dilation', vertical_dim=False, default=1),
-                                     kernel_size=extract_params_from_structure(structure=network_structure, index=i, key='kernel_size', vertical_dim=False, default=4),
-                                     stride=extract_params_from_structure(structure=network_structure, index=i, key='stride', vertical_dim=False, default=1))
+                data_height = out_dim(i=data_height,
+                                      p=padding[0],
+                                      d=extract_params_from_structure(structure=network_structure, index=i, key='dilation', vertical_dim=True, default=1),
+                                      k=extract_params_from_structure(structure=network_structure, index=i, key='kernel_size', vertical_dim=True, default=4),
+                                      s=extract_params_from_structure(structure=network_structure, index=i, key='stride', vertical_dim=True, default=1))
+                data_width = out_dim(i=data_width,
+                                     p=padding[1],
+                                     d=extract_params_from_structure(structure=network_structure, index=i, key='dilation', vertical_dim=False, default=1),
+                                     k=extract_params_from_structure(structure=network_structure, index=i, key='kernel_size', vertical_dim=False, default=4),
+                                     s=extract_params_from_structure(structure=network_structure, index=i, key='stride', vertical_dim=False, default=1))
 
                 # Prepare for next iteration: this layer's nr of output channels/filters is equal to nr of next Conv2d layer's input channels
                 in_channels = layer_specs['out_channels']
@@ -101,11 +108,6 @@ class InCNN(nn.Module):
 
                 # Compute layer's input size
                 flattened_size = data_height * data_width * network_structure[i-1]['out_channels']
-
-                print("data_height size:", data_height)
-                print("data_width size:", data_width)
-                print("network_structure[i-1]['out_channels'] size:", network_structure[i-1]['out_channels'])
-                print("Flattened size:", flattened_size)
 
                 # Add flattening layer
                 self.pipeline.append(
@@ -158,12 +160,14 @@ def extract_params_from_structure(structure: list, index: int, key: str, vertica
         return default
 
 
-def size_preserving_padding(input_dim, stride, kernel_size):
-    return int(((stride - 1) * input_dim - stride + kernel_size) / 2)
+def size_preserving_padding(i, k, d: int = 1, s: int = 1):
+    # Can be generalized to: ((out_dim - 1)*stride - input_dim + kernel_size + (kernel_size-1)*(dilation-1)) / 2)
+    return int(torch.floor(torch.tensor(((i - 1)*s - i + k + (k-1)*(d-1)) / 2)).numpy())
 
 
-def out_dim(input_dim, padding, dialation, kernel_size, stride):
-    return int(torch.floor(torch.tensor((input_dim + 2*padding - dialation*(kernel_size-1) - 1)/stride + 1)).numpy())
+def out_dim(i, k, p, d: int = 1, s: int = 1):
+    # Ref: https://discuss.pytorch.org/t/how-to-keep-the-shape-of-input-and-output-same-when-dilation-conv/14338/2?u=bick95
+    return int(torch.floor(torch.tensor((i + 2*p - k - (k - 1)*(d - 1)) / s + 1)).numpy())
 
 
 class InMLP(nn.Module):
