@@ -521,6 +521,11 @@ class ProximalPolicyOptimization:
         else:
             state = self.init_markov_state(add_batch_dimension(env.reset()))
 
+        show_states_visually(state=state[0], color_code='L', confirm_message='Confirm Eval Init state (1)')
+        show_states_visually(state=state[1], color_code='L', confirm_message='Confirm Eval Init state (2)')
+        show_states_visually(state=state[2], color_code='L', confirm_message='Confirm Eval Init state (3)')
+        show_states_visually(state=state[3], color_code='L', confirm_message='Confirm Eval Init state (4)')
+
         last_state = state.clone()
         sample_next_action_randomly = False
 
@@ -555,6 +560,11 @@ class ProximalPolicyOptimization:
 
                 # Compute new Markov state
                 state = self.env2markov(state, add_batch_dimension(next_state))
+
+                show_states_visually(state=state[0], color_code='L', confirm_message='Confirm Eval Updated state (1)')
+                show_states_visually(state=state[1], color_code='L', confirm_message='Confirm Eval Updated state (2)')
+                show_states_visually(state=state[2], color_code='L', confirm_message='Confirm Eval Updated state (3)')
+                show_states_visually(state=state[3], color_code='L', confirm_message='Confirm Eval Updated state (4)')
 
                 if terminal_state:
                     # Simulation has terminated
