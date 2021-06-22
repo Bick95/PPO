@@ -31,7 +31,7 @@ def save(args: json, attribute: str, saver):
         saver(getattr(args, attribute))
 
 
-def save_ppo(ppo: PPO, args, save_dir: str, train_stats):
+def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict):
     # Saves all components that may be saved after a training run as requested by user through command line arguments
 
     if args.policy_net_path != '-':

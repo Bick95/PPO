@@ -11,37 +11,36 @@ import torch.nn as nn
 class ValueNet(nn.Module):
 
     def __init__(self,
-                 observation_space: gym.Space = None,
+                 observation_sample: torch.tensor = None,
                  input_net_type: str = 'CNN',
                  shared_layers: torch.nn.Module = None,
-                 hidden_nodes: int or list = [50, 50, 50],
-                 nonlinearity: torch.nn.functional = F.relu
+                 nonlinearity: torch.nn.functional = F.relu,
+                 network_structure: list = None,
                  ):
 
         super(ValueNet, self).__init__()
 
-        self.observation_space = observation_space
-
         # Add input module
-        if shared_layers is None:
+        if shared_layers:
+            self.input_module = shared_layers
 
+        else:
+            # Assign input layer possibly consisting of multiple internal layers;
+            # Design dependent on nature of state observations, as well as on desired network structure provided
             if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
-                # Create CNN-NN to encode inputs
+                # Create CNN to encode inputs
                 self.input_module = InCNN(
-                    input_sample=self.observation_space.sample(),
+                    network_structure=network_structure,
+                    input_sample=observation_sample,
+                    nonlinearity=nonlinearity,
                 )
 
             else:
-                # Compute nr of input features for given gym env
-                input_features = sum(self.observation_space.sample().shape)
-
                 # Create MLP-NN to encode inputs
-                self.input_module = InMLP(input_features=input_features,
-                                          hidden_nodes=hidden_nodes,
-                                          nonlinearity=nonlinearity)
-
-        else:
-            self.input_module = shared_layers
+                self.input_module = InMLP(network_structure=network_structure,
+                                          input_sample=observation_sample,
+                                          nonlinearity=nonlinearity,
+                                          )
 
         # Automatically determine how many input nodes output module is gonna need to have
         input_features_output_module = self.input_module._modules[next(reversed(self.input_module._modules))].out_features

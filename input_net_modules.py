@@ -13,6 +13,8 @@ class InCNN(nn.Module):
                  ):
         super(InCNN, self).__init__()
 
+        print("SHAPE input sample:", input_sample.shape)
+
         # Determine dimensions of observation (input) sample
         data_height = input_sample.shape[0]
         data_width = input_sample.shape[1]
