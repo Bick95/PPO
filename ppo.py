@@ -24,12 +24,33 @@ def simulation_is_stuck(last_state, state):
     return torch.eq(last_state, state).all()
 
 
-def show_states_visually(state: np.ndarray or torch.tensor, color_code: str = 'RGB', confirm_message: str = "Confirm..."):
+def visualize_states(state: np.ndarray or torch.tensor,
+                     env_state_depth: int,
+                     markov_length: int,
+                     color_code: str = 'RGB',
+                     confirm_message: str = "Confirm..."):
 
-    if isinstance(state, torch.tensor):
-        state = state.numpy()
+    if isinstance(state, torch.Tensor):
+        state = state.numpy()    # Convert to numpy array
 
-    image = Image.fromarray(state.astype('uint8'), color_code)
+    if len(state.shape) > 3:
+        state = state.squeeze()  # Drop batch dimension
+
+    # Get contained environmental state representations
+    images = []
+
+    for i in range(markov_length):
+        extracted_env_state = state[:, :, i*env_state_depth : (i+1)*env_state_depth].squeeze()
+        temp_image = Image.fromarray(extracted_env_state.astype('uint8'), color_code)
+        images.append(temp_image)
+
+    # Create empty image container
+    image = Image.new(color_code, (images[0].width * markov_length, images[0].height * markov_length))
+
+    # Add individual images
+    for i in range(markov_length):
+        image.paste(images[i], (i * images[0].width, 0))
+
     image.show()
     input(confirm_message)
 
@@ -521,10 +542,11 @@ class ProximalPolicyOptimization:
         else:
             state = self.init_markov_state(add_batch_dimension(env.reset()))
 
-        show_states_visually(state=state[0], color_code='L', confirm_message='Confirm Eval Init state (1)')
-        show_states_visually(state=state[1], color_code='L', confirm_message='Confirm Eval Init state (2)')
-        show_states_visually(state=state[2], color_code='L', confirm_message='Confirm Eval Init state (3)')
-        show_states_visually(state=state[3], color_code='L', confirm_message='Confirm Eval Init state (4)')
+        visualize_states(state=state,
+                         env_state_depth=self.depth_processed_env_state,
+                         markov_length=self.markov_length,
+                         color_code='L' if self.grayscale_transform else 'RGB',
+                         confirm_message='Confirm Eval Init state (1)')
 
         last_state = state.clone()
         sample_next_action_randomly = False
@@ -561,10 +583,11 @@ class ProximalPolicyOptimization:
                 # Compute new Markov state
                 state = self.env2markov(state, add_batch_dimension(next_state))
 
-                show_states_visually(state=state[0], color_code='L', confirm_message='Confirm Eval Updated state (1)')
-                show_states_visually(state=state[1], color_code='L', confirm_message='Confirm Eval Updated state (2)')
-                show_states_visually(state=state[2], color_code='L', confirm_message='Confirm Eval Updated state (3)')
-                show_states_visually(state=state[3], color_code='L', confirm_message='Confirm Eval Updated state (4)')
+                visualize_states(state=state,
+                                 env_state_depth=self.depth_processed_env_state,
+                                 markov_length=self.markov_length,
+                                 color_code='L' if self.grayscale_transform else 'RGB',
+                                 confirm_message='Confirm Eval Updates state (2)')
 
                 if terminal_state:
                     # Simulation has terminated
