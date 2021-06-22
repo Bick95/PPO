@@ -87,6 +87,7 @@ class InCNN(nn.Module):
                               kernel_size=layer_specs['kernel_size'],
                               stride=layer_specs['stride'],
                               padding=padding,
+                              dilation=layer_specs['dilation']
                               )
                 )
 
