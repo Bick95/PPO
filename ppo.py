@@ -583,7 +583,7 @@ class ProximalPolicyOptimization:
 
                 if render and t < min(time_steps, 500):
                     env.render()
-                    time.sleep(0.2)
+                    time.sleep(0.1)
 
                 # Compute new Markov state
                 state = self.env2markov(state, add_batch_dimension(next_state))

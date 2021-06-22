@@ -10,7 +10,7 @@
     "parallel_agents": 5,
     "learning_rate_pol": 0.001,
     "learning_rate_val": 0.001,
-    "trajectory_length": 50,
+    "trajectory_length": 200,
     "discount_factor": 0.99,
     "batch_size": 32,
     
