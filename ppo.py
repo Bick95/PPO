@@ -65,7 +65,7 @@ class ProximalPolicyOptimization:
         self.time_steps_extensive_eval = time_steps_extensive_eval
         self.deterministic_eval = deterministic_eval
 
-        # Determine how to handle clipping constant - keep it constant or anneal from some max to some min value
+        # Determine how to handle clipping constant - keep it constant or anneal from some max value to some min value
         if isinstance(clipping_parameter, float):
             # Keep clipping parameter epsilon constant
             self._epsilon = torch.tensor(clipping_parameter, device=self.device, requires_grad=False)
