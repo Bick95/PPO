@@ -104,7 +104,6 @@ class ProximalPolicyOptimization:
             env = gym.make(env)
 
         self.env_name = env.unwrapped.spec.id
-        self.observation_space = env.observation_space  # TODO: take out
         self.action_space = env.action_space
         self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
 
@@ -133,17 +132,20 @@ class ProximalPolicyOptimization:
                                     network_structure=network_structure,
                                     ).to(device=self.device)
 
-        print('Networks successfully created:')
-        print('Policy network:\n', self.policy)
-        print('Value net:\n', self.val_net)
-
         # Create optimizers (for policy network and state value network respectively)
         self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
         self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
 
-
         # Vectorize env for each parallel agent to get its own env instance
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
+
+        self.print_networ_summary()
+
+
+    def print_networ_summary(self):
+        print('Networks successfully created:')
+        print('Policy network:\n', self.policy)
+        print('Value net:\n', self.val_net)
 
 
     def sample_observation_space(self):
@@ -512,7 +514,7 @@ class ProximalPolicyOptimization:
         if self.deterministic_eval:
             env, state, total_rewards = self.random_env_start(env)
         else:
-            state = self.init_markov_state(add_batch_dimension(env.reset()))  # TODO: remove expand_dims ?
+            state = self.init_markov_state(add_batch_dimension(env.reset()))
 
         last_state = state.clone()
         sample_next_action_randomly = False
