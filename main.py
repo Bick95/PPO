@@ -4,7 +4,7 @@ import torch
 import argparse
 from plot import plot_avg_trajectory_len
 from ppo import ProximalPolicyOptimization as PPO
-from utils import save, get_unique_save_path, save_ppo
+from main_utils import save, get_unique_save_path, save_ppo
 
 # Path to directory where to save all data to be saved after training
 save_dir = './train_results/' + get_unique_save_path() + '/'

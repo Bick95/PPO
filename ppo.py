@@ -11,48 +11,7 @@ import torch.nn.functional as F
 from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS
-
-
-def add_batch_dimension(state: np.ndarray):
-    return np.expand_dims(state, axis=0)
-
-
-def simulation_is_stuck(last_state, state):
-    # If two consecutive states are absolutely identical, then we assume the simulation to be stuck in a semi-terminal state
-    # Returns True if two states are identical, else False
-
-    return torch.eq(last_state, state).all()
-
-
-def visualize_markov_state(state: np.ndarray or torch.tensor,
-                     env_state_depth: int,
-                     markov_length: int,
-                     color_code: str = 'RGB',
-                     confirm_message: str = "Confirm..."):
-
-    if isinstance(state, torch.Tensor):
-        state = state.numpy()    # Convert to numpy array
-
-    if len(state.shape) > 3:
-        state = state.squeeze()  # Drop batch dimension
-
-    # Get contained environmental state representations
-    images = []
-
-    for i in range(markov_length):
-        extracted_env_state = state[:, :, i*env_state_depth : (i+1)*env_state_depth].squeeze()
-        temp_image = Image.fromarray(extracted_env_state.astype('uint8'), color_code)
-        images.append(temp_image)
-
-    # Create empty image container
-    image = Image.new(color_code, (images[0].width * markov_length, images[0].height * markov_length))
-
-    # Add individual images
-    for i in range(markov_length):
-        image.paste(images[i], (i * images[0].width, 0))
-
-    image.show()
-    input(confirm_message)
+from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state
 
 
 class ProximalPolicyOptimization:
@@ -69,7 +28,7 @@ class ProximalPolicyOptimization:
                  trajectory_length: int = 1000,
                  discount_factor: float = 0.99,
                  batch_size: int = 32,
-                 clipping_constant: float = 0.2,
+                 clipping_parameter: float or dict = 0.2,
                  entropy_contrib_factor: float = 0.15,
                  vf_contrib_factor: float = .9,
                  input_net_type: str = 'MLP',
@@ -77,8 +36,8 @@ class ProximalPolicyOptimization:
                  intermediate_eval_steps: int = 200,
                  standard_dev=torch.ones,
                  nonlinearity: torch.nn.functional = F.relu,
-                 markov_length: int = 1,                  # How many environmental state get concatenated to one state representation
-                 grayscale_transform: bool = False,             # Whether to transform RGB inputs to grayscale or not (if applicable)
+                 markov_length: int = 1,  # How many environmental state get concatenated to one state representation
+                 grayscale_transform: bool = False,  # Whether to transform RGB inputs to grayscale or not (if applicable)
                  network_structure: list = None,  # Replacement for hidden parameter,
                  deterministic_eval: bool = False,  # Whether to compute actions stochastically or deterministically throughout evaluation
                  resize_visual_inputs: tuple = None,
@@ -97,15 +56,42 @@ class ProximalPolicyOptimization:
         self.T = trajectory_length              # Parameter T in paper
         self.gamma = discount_factor
         self.batch_size = batch_size
-        self.epsilon = torch.tensor(clipping_constant, device=self.device)
-        self.h = torch.tensor(entropy_contrib_factor, device=self.device)          # Parameter h in paper
-        self.v = torch.tensor(vf_contrib_factor, device=self.device)               # Parameter v in paper
+        self.h = torch.tensor(entropy_contrib_factor, device=self.device, requires_grad=False)   # Parameter h in paper
+        self.v = torch.tensor(vf_contrib_factor, device=self.device, requires_grad=False)        # Parameter v in paper
         self.input_net_type = input_net_type
         self.show_final_demo = show_final_demo  # Do render final demo visually or not
         self.intermediate_eval_steps = intermediate_eval_steps
         self.markov_length = markov_length
         self.time_steps_extensive_eval = time_steps_extensive_eval
         self.deterministic_eval = deterministic_eval
+
+        # Determine how to handle clipping constant - keep it constant or anneal from some max to some min value
+        if isinstance(clipping_parameter, float):
+            # Keep clipping parameter epsilon constant
+            self._epsilon = torch.tensor(clipping_parameter, device=self.device, requires_grad=False)
+            self.epsilon = lambda _: self._epsilon
+
+        elif isinstance(clipping_parameter, dict):
+            # Anneal clipping parameter between some values
+            self._max_clipping_constant = clipping_parameter['max'] if 'max' in clipping_parameter.keys() else 1.
+            self._min_clipping_constant = clipping_parameter['min'] if 'min' in clipping_parameter.keys() else 0.
+
+            if clipping_parameter['decay_type'].lower() == 'linear':
+                # Clipping parameter epsilon gets linearly annealed from max to min throughout training
+                self.epsilon = lambda iteration: torch.tensor(
+                    max(self._min_clipping_constant,
+                        self._max_clipping_constant * ((self.iterations - iteration) / self.iterations)
+                    ), device=self.device, requires_grad=False)
+
+            elif clipping_parameter['decay_type'].lower() == 'exponential':
+                # Clipping parameter epsilon gets exponentially annealed from max to min throughout training
+                raise NotImplementedError("Exponential decay not implemented yet...")
+
+            else:
+                raise NotImplementedError("Decay can only be linear or exponential.")
+
+        else:
+            raise NotImplementedError("Clipping constant must be of type float or dict.")
 
         self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
         self.grayscale_layer = Grayscale(num_output_channels=1) if self.grayscale_transform else None
@@ -163,9 +149,46 @@ class ProximalPolicyOptimization:
                                     network_structure=network_structure,
                                     ).to(device=self.device)
 
-        # Create optimizers (for policy network and state value network respectively)
-        self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
-        self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
+
+        # Create optimizers (for policy network and state value network respectively) + potentially respective learning
+        # rate schedulers:
+
+        if isinstance(learning_rate_pol, float):
+            # Simple optimizer with constant learning rate for policy net
+            self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
+            self.lr_scheduler_pol = None
+
+        elif isinstance(learning_rate_pol, dict):
+            # Create optimizer plus a learning rate scheduler associated with optimizer
+            self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol['max'])
+
+            if learning_rate_pol['decay_type'].lower() == 'linear':
+                # TODO: define lambda
+                self.lr_scheduler_pol = None  # TODO: implement scheduler
+            else:
+                raise NotImplementedError("Currently, only linear learning rate decay is supported.")
+
+        else:
+            raise NotImplementedError("learning_rate_pol must be (constant) float or dict.")
+
+        if isinstance(learning_rate_val, float):
+            # Simple optimizer with constant learning rate for value net
+            self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
+            self.lr_scheduler_val = None
+
+        elif isinstance(learning_rate_val, dict):
+            # Create optimizer plus a learning rate scheduler associated with optimizer
+            self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val['max'])
+
+            if learning_rate_val['decay_type'].lower() == 'linear':
+                # TODO: define lambda
+                self.lr_scheduler_val = None  # TODO: implement scheduler
+            else:
+                raise NotImplementedError("Currently, only linear learning rate decay is supported.")
+
+
+        else:
+            raise NotImplementedError("learning_rate_val must be (constant) float or dict.")
 
         # Vectorize env for each parallel agent to get its own env instance
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
@@ -291,7 +314,7 @@ class ProximalPolicyOptimization:
             #   1. Collecting new training data
             #   2. Updating nets based on newly generated training data
 
-            print('Iteration:', iteration)
+            print('Iteration:', iteration, "\nEpsilon:", self.epsilon(iteration))
 
             # Init data collection and storage for current iteration
             num_observed_train_steps = 0
@@ -421,7 +444,7 @@ class ProximalPolicyOptimization:
 
                     # Evaluate loss function first component-wise, then combined:
                     # L^{CLIP}
-                    L_CLIP = self.L_CLIP(log_prob, log_prob_old_, advantage_)
+                    L_CLIP = self.L_CLIP(log_prob, log_prob_old_, advantage_, iteration)
 
                     # L^{V}
                     L_V = self.L_VF(state_val, target_state_val_)
@@ -449,9 +472,15 @@ class ProximalPolicyOptimization:
                     # Document training progress after one weight update
                     acc_epoch_loss += loss.cpu().detach().numpy()
 
-                # Document training progress after one full epoch of training
+                # Document training progress after one full epoch/iteration of training
                 iteration_loss += acc_epoch_loss
                 self.training_stats['devel_epoch_loss'].append(acc_epoch_loss)
+
+                if self.lr_scheduler_pol:
+                    self.lr_scheduler_pol.step()
+
+                if self.lr_scheduler_val:
+                    self.lr_scheduler_val.step()
 
             # Document training progress at the end of a full iteration
             self.training_stats['devel_itera_loss'].append(iteration_loss)
@@ -478,13 +507,13 @@ class ProximalPolicyOptimization:
         return self.training_stats
 
 
-    def L_CLIP(self, log_prob, log_prob_old, advantage):
+    def L_CLIP(self, log_prob, log_prob_old, advantage, current_train_iteration):
         # Computes PPO's main objective L^{CLIP}
 
         prob_ratio = torch.exp(log_prob - log_prob_old)
 
         unclipped = prob_ratio * advantage
-        clipped = torch.clip(prob_ratio, min=1.-self.epsilon, max=1.+self.epsilon) * advantage
+        clipped = torch.clip(prob_ratio, min=1.-self.epsilon(current_train_iteration), max=1.+self.epsilon(current_train_iteration)) * advantage
 
         return torch.mean(torch.min(unclipped, clipped))
 

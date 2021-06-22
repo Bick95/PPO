@@ -14,7 +14,7 @@
     "discount_factor": 0.99,
     "batch_size": 32,
     
-    "clipping_constant": 0.05,
+    "clipping_parameter": 0.05,
     "entropy_contrib_factor": 0.01,
     "vf_contrib_factor": 1.,
     

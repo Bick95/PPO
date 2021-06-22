@@ -22,6 +22,7 @@ class ValueNet(nn.Module):
 
         # Add input module
         if shared_layers:
+            # Share input layer with policy net
             self.input_module = shared_layers
 
         else:

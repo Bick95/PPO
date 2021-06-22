@@ -1,6 +1,5 @@
 import gym
 import torch.nn.functional as F
-import numpy as np
 from input_net_modules import InMLP, InCNN
 from output_net_modules import OutMLP
 from constants import DISCRETE, CONTINUOUS

@@ -7,21 +7,29 @@
     "total_num_state_transitions": 100000,
     "param_sharing": True,
 
-    "epochs": 5,
+    "epochs": 3,
     "parallel_agents": 8,
-    "learning_rate_pol": 0.001,
+    "learning_rate_pol": {
+		'decay_type': 'linear',
+		'max': 0.001,
+		'min': 0.,
+	},
     "learning_rate_val": 0.001,
-    "trajectory_length": 128,
+    "trajectory_length": 256,
     "discount_factor": 0.99,
     "batch_size": 32,
     
-    "clipping_constant": 0.09,
+    "clipping_parameter": {
+		'decay_type': 'linear',
+		'max': .1,
+		'min': 0.,
+	},
     "entropy_contrib_factor": 0.01,
     "vf_contrib_factor": 1.,
     
     'show_final_demo': True,
     'deterministic_eval': True,
-	'time_steps_extensive_eval': 2000,
+	'time_steps_extensive_eval': 1000,
     
     'intermediate_eval_steps': 1000,
     

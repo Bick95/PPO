@@ -1,7 +1,7 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from input_net_modules_utils import extract_params_from_structure, size_preserving_padding, out_dim
 
 
 class InCNN(nn.Module):
@@ -12,8 +12,6 @@ class InCNN(nn.Module):
                  network_structure: list = None,
                  ):
         super(InCNN, self).__init__()
-
-        print("SHAPE input sample:", input_sample.shape)
 
         # Determine dimensions of observation (input) sample
         data_height = input_sample.shape[0]
@@ -83,11 +81,11 @@ class InCNN(nn.Module):
                 # Add conv layer
                 self.pipeline.append(
                     nn.Conv2d(in_channels=in_channels,
-                              out_channels=layer_specs['out_channels'],
-                              kernel_size=layer_specs['kernel_size'],
-                              stride=layer_specs['stride'],
+                              out_channels=layer_specs['out_channels'] if 'out_channels' in layer_specs.keys() else 32,
+                              kernel_size=layer_specs['kernel_size'] if 'kernel_size' in layer_specs.keys() else 4,
+                              stride=layer_specs['stride'] if 'stride' in layer_specs.keys() else 1,
                               padding=padding,
-                              dilation=layer_specs['dilation']
+                              dilation=layer_specs['dilation'] if 'dilation' in layer_specs.keys() else 1
                               )
                 )
 
@@ -143,34 +141,6 @@ class InCNN(nn.Module):
             x = self.nonlinearity(layer(x))
 
         return x
-
-
-def extract_params_from_structure(structure: list, index: int, key: str, vertical_dim: bool, default: int):
-    # Takes the specification of the structure of a NN and returns a requested element from it
-    if key in structure[index].keys():
-        # Requested specification is provided
-        if isinstance(structure[index][key], int):
-            # Same specification for both vertical and horizontal case
-            return structure[index][key]
-        elif isinstance(structure[index][key], tuple):
-            # Different specifications for vertical and horizontal axes respectively
-            return structure[index][key][0 if vertical_dim else 1]
-        else:
-            # Assumed different specifications for vertical and horizontal axes respectively, just not in tuple format
-            return tuple(structure[index][key])[0 if vertical_dim else 1]
-    else:
-        # Requested specification is not provided
-        return default
-
-
-def size_preserving_padding(i, k, d: int = 1, s: int = 1):
-    # Can be generalized to: ((out_dim - 1)*stride - input_dim + kernel_size + (kernel_size-1)*(dilation-1)) / 2)
-    return int(torch.floor(torch.tensor(((i - 1)*s - i + k + (k-1)*(d-1)) / 2)).numpy())
-
-
-def out_dim(i, k, p, d: int = 1, s: int = 1):
-    # Ref: https://discuss.pytorch.org/t/how-to-keep-the-shape-of-input-and-output-same-when-dilation-conv/14338/2?u=bick95
-    return int(torch.floor(torch.tensor((i + 2*p - k - (k - 1)*(d - 1)) / s + 1)).numpy())
 
 
 class InMLP(nn.Module):
