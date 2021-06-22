@@ -24,7 +24,7 @@ def simulation_is_stuck(last_state, state):
     return torch.eq(last_state, state).all()
 
 
-def visualize_states(state: np.ndarray or torch.tensor,
+def visualize_markov_state(state: np.ndarray or torch.tensor,
                      env_state_depth: int,
                      markov_length: int,
                      color_code: str = 'RGB',
@@ -542,11 +542,12 @@ class ProximalPolicyOptimization:
         else:
             state = self.init_markov_state(add_batch_dimension(env.reset()))
 
-        visualize_states(state=state,
-                         env_state_depth=self.depth_processed_env_state,
-                         markov_length=self.markov_length,
-                         color_code='L' if self.grayscale_transform else 'RGB',
-                         confirm_message='Confirm Eval Init state (1)')
+        # Uncomment for debugging purposes or to see how states are represented:
+        #visualize_markov_state(state=state,
+        #                       env_state_depth=self.depth_processed_env_state,
+        #                       markov_length=self.markov_length,
+        #                       color_code='L' if self.grayscale_transform else 'RGB',
+        #                       confirm_message='Confirm Eval Init state (1)')
 
         last_state = state.clone()
         sample_next_action_randomly = False
@@ -583,11 +584,12 @@ class ProximalPolicyOptimization:
                 # Compute new Markov state
                 state = self.env2markov(state, add_batch_dimension(next_state))
 
-                visualize_states(state=state,
-                                 env_state_depth=self.depth_processed_env_state,
-                                 markov_length=self.markov_length,
-                                 color_code='L' if self.grayscale_transform else 'RGB',
-                                 confirm_message='Confirm Eval Updates state (2)')
+                # Uncomment for debugging purposed or to see how states are represented:
+                #visualize_markov_state(state=state,
+                #                       env_state_depth=self.depth_processed_env_state,
+                #                       markov_length=self.markov_length,
+                #                       color_code='L' if self.grayscale_transform else 'RGB',
+                #                       confirm_message='Confirm Eval Updates state (2)')
 
                 if terminal_state:
                     # Simulation has terminated

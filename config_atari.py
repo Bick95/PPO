@@ -4,7 +4,7 @@
     'grayscale_transform': True,
 	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 100000,
+    "total_num_state_transitions": 1000000,
     "param_sharing": True,
 
     "epochs": 5,
