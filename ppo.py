@@ -230,18 +230,22 @@ class ProximalPolicyOptimization:
 
     def preprocess_env_state(self, state_batch: np.ndarray):
 
-        # Required channel ordering for resizing and grayscaling: (Batch, Color, Height, Width)
-        state_batch = torch.tensor(state_batch, dtype=torch.float).permute(0, 3, 1, 2)
+        state_batch = torch.tensor(state_batch, dtype=torch.float)
 
-        if self.resize_transform:
-            state_batch = self.resize(state_batch)
+        if self.resize_transform or self.grayscale_transform:
 
-        if self.grayscale_transform:
-            state_batch = self.grayscale(state_batch)            # Convert to grayscale
+            # Required channel ordering for resizing and grayscaling: (Batch, Color, Height, Width)
+            state_batch = state_batch.permute(0, 3, 1, 2)
 
-        # Bring dimensions back into right order: (Batch, Height, Width, Color=1)
-        # Color-dimension (=1) is used here as that dimension along which different env states get stacked to form a Markov state
-        state_batch = state_batch.permute(0, 2, 3, 1)
+            if self.resize_transform:
+                state_batch = self.resize(state_batch)
+
+            if self.grayscale_transform:
+                state_batch = self.grayscale(state_batch)            # Convert to grayscale
+
+            # Bring dimensions back into right order: (Batch, Height, Width, Color=1)
+            # Color-dimension (=1) is used here as that dimension along which different env states get stacked to form a Markov state
+            state_batch = state_batch.permute(0, 2, 3, 1)
 
         return state_batch
 
