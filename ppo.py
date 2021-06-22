@@ -24,6 +24,16 @@ def simulation_is_stuck(last_state, state):
     return torch.eq(last_state, state).all()
 
 
+def show_states_visually(state: np.ndarray or torch.tensor, color_code: str = 'RGB', confirm_message: str = "Confirm..."):
+
+    if isinstance(state, torch.tensor):
+        state = state.numpy()
+
+    image = Image.fromarray(state.astype('uint8'), color_code)
+    image.show()
+    input(confirm_message)
+
+
 class ProximalPolicyOptimization:
 
     def __init__(self,
@@ -139,10 +149,10 @@ class ProximalPolicyOptimization:
         # Vectorize env for each parallel agent to get its own env instance
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
 
-        self.print_networ_summary()
+        self.print_network_summary()
 
 
-    def print_networ_summary(self):
+    def print_network_summary(self):
         print('Networks successfully created:')
         print('Policy network:\n', self.policy)
         print('Value net:\n', self.val_net)
@@ -211,11 +221,6 @@ class ProximalPolicyOptimization:
         # Bring dimensions back into right order: (Batch, Height, Width, Color=1)
         # Color-dimension (=1) is used here as that dimension along which different env states get stacked to form a Markov state
         state_batch = state_batch.permute(0, 2, 3, 1)
-
-        # image = Image.fromarray(resized[0].astype('uint8'), 'RGB')
-        # image.show()
-        # input('Confirm...0')
-        # initial_env_state = add_batch_dimension(np.array(resized))
 
         return state_batch
 
