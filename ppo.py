@@ -8,6 +8,7 @@ from policy import Policy
 from value_net import ValueNet
 import torch.nn.functional as F
 from torchvision.transforms import Resize
+from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS
 import time
 
@@ -17,6 +18,10 @@ import time
 #   Add a separate Git branch dedicated to working on Atari envs.
 
 # TODO: Adjust to work with RNN policies. Add dedicated Git branch
+
+
+def add_batch_dimension(state: np.ndarray):
+    return np.expand_dims(state, axis=0)
 
 
 class ProximalPolicyOptimization:
@@ -68,10 +73,13 @@ class ProximalPolicyOptimization:
         self.show_final_demo = show_final_demo  # Do render final demo visually or not
         self.intermediate_eval_steps = intermediate_eval_steps
         self.markov_length = markov_length
-        self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
-        self.deterministic_eval = deterministic_eval
         self.time_steps_extensive_eval = time_steps_extensive_eval
-        self.resize_visual_inputs = resize_visual_inputs
+        self.deterministic_eval = deterministic_eval
+
+        self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
+        self.grayscale_layer = Grayscale(num_output_channels=1) if self.grayscale_transform else None
+
+        self.resize_transform = True if resize_visual_inputs else False
         self.resize_layer = Resize(size=resize_visual_inputs) if resize_visual_inputs else None
 
         # Set up documentation of training stats
@@ -132,7 +140,7 @@ class ProximalPolicyOptimization:
 
     def sample_observation_space(self):
         # Returns a sample of observation/state space for a single minibatch example
-        return self.init_markov_state(np.expand_dims(gym.make(self.env_name).reset(), axis=0))[0]
+        return self.init_markov_state(add_batch_dimension(gym.make(self.env_name).reset()))[0]
 
 
     def random_env_start(self, env):
@@ -142,8 +150,8 @@ class ProximalPolicyOptimization:
 
         # Reset environment and init Markov state
         last_env_state = env.reset()
-        state = self.init_markov_state(np.expand_dims(last_env_state, axis=0))  # TODO: remove expand_dims ?
-        print("Init state shape::", state.shape)
+        state = self.init_markov_state(add_batch_dimension(last_env_state))
+        #print("Init state shape::", state.shape)
 
         total_reward = 0
         identical_states = True
@@ -158,8 +166,8 @@ class ProximalPolicyOptimization:
                 # Recursive call to make sure to always return non-terminated envs.
                 return self.random_env_start(env)
 
-            # Update Markov state  # TODO: Move expand_dims() into init_markov_state() and env2markov() ?!?!
-            state = self.env2markov(old_markov_state=state, new_env_state=np.expand_dims(next_state, axis=0))
+            # Update Markov state
+            state = self.env2markov(old_markov_state=state, new_env_state=add_batch_dimension(next_state))
 
             # Check whether simulation still hasn't started producing different states
             comparison = last_env_state == next_state
@@ -169,59 +177,55 @@ class ProximalPolicyOptimization:
             total_reward += reward
             last_env_state = next_state
 
-        print("Init state shape (final)::", state.shape)
         return env, state, total_reward
 
 
-    def rgb2gray(self, image_batch):
-        # See Wikipedia for weighting factors corresponding to the individual color channels:
-        # https://en.wikipedia.org/wiki/Grayscale#Converting_color_to_grayscale
-        return np.dot(image_batch[..., :3], [0.2126, 0.7152, 0.0722])
+    def grayscale(self, image_batch):
+        return self.grayscale_layer(image_batch)
 
 
-    def resize(self, image):
-        image = torch.tensor(image).permute(0, 3, 1, 2)  # Required channel ordering for resizing: (Batch, Color, Height, Width)
-        return self.resize_layer(image).permute(0, 2, 3, 1).numpy()
+    def resize(self, image_batch):
+        return self.resize_layer(image_batch)
 
+
+    def preprocess_env_state(self, state_batch: np.ndarray):
+        #print('Shape state before preprocessing:', state_batch.shape)
+
+        # Required channel ordering for resizing and grayscaling: (Batch, Color, Height, Width)
+        state_batch = torch.tensor(state_batch).permute(0, 3, 1, 2)
+
+        if self.resize_transform:
+            state_batch = self.resize(state_batch)
+            # image = Image.fromarray(resized[0].astype('uint8'), 'RGB')
+            # image.show()
+            # input('Confirm...0')
+            # initial_env_state = add_batch_dimension(np.array(resized))
+
+        #print('Shape state after resizing:', state_batch.shape)
+
+        if self.grayscale_transform:
+            state_batch = self.grayscale(state_batch)            # Convert to grayscale
+
+        # Bring dimensions back into right order: (Batch, Height, Width, Color=1)
+        # Color-dimension (=1) is used here as that dimension along which different env states get stacked to form a Markov state
+        state_batch = state_batch.permute(0, 2, 3, 1).numpy()
+
+        #print('Shape state after grayscaling:', state_batch.shape)
+
+        state_batch = torch.tensor(state_batch, dtype=torch.float)
+
+        return state_batch
 
 
     def init_markov_state(self, initial_env_state):
         # Takes a batch of initial states as returned by (vectorized) gym env, and returns a batch tensor with each
         # state being repeated a few times (as many times as a Markov state consists of given self.markov_length param)
 
-        print('initial_env_state shape:', initial_env_state.shape)
+        initial_env_state = self.preprocess_env_state(initial_env_state)
 
-        if self.resize_visual_inputs:
-            resized = self.resize(initial_env_state)
-            #image = Image.fromarray(resized[0].astype('uint8'), 'RGB')
-            #image.show()
-            #input('Confirm...0')
-            initial_env_state = np.expand_dims(np.array(resized), axis=0)
-
-        #print("Init state (batch):", initial_env_state)
-        #print("Type init state:", type(initial_env_state))
-        #print("Shape init:", initial_env_state.shape)
-        #image = Image.fromarray(initial_env_state[0].astype('uint8'), 'RGB')
-        #image.show('Title: RGB')
-        #time.sleep(5)
-        #input('Confirm......')
-
-        if self.grayscale_transform:
-            initial_env_state = self.rgb2gray(initial_env_state)            # Convert to grayscale
-            #print("Shape grayscale:", initial_env_state.shape)
-            #print("Shape grayscale[0]:", initial_env_state[0].shape)
-            #print('Type grayscale[0]:', type(initial_env_state[0]))
-            #image2 = Image.fromarray(initial_env_state[0].astype('uint8'), 'L')
-            #image2.show('Title: L')
-
-            initial_env_state = np.expand_dims(initial_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
-            #print("Shape unsqueezed:", initial_env_state.shape)
-
-        initial_env_state = torch.tensor(initial_env_state, dtype=torch.float)
+        # Repeat initial state a few times to form initial markov state
         init_markov_state = torch.cat(self.markov_length * [initial_env_state], dim=-1)
-        #print('Size init_markov_state (after transform):', init_markov_state.size())
-        #print('init_markov_state:', init_markov_state)
-        #print("Shape init_markov_state:", init_markov_state.shape)
+
         return init_markov_state
 
 
@@ -229,43 +233,13 @@ class ProximalPolicyOptimization:
         # Function to update Markov states by dropping the oldest environmental state in Markov state and instead adding
         # the latest environmental state observation to the Markov state representation
 
-        # TODO: How is expand_dims() handled in this function? Is it used consistently?
-        # TODO: Consider moving expand_dim() calls here instead of calling it in calls of env2markov()!
-        #  (Same for method above!)
+        #print("Shape old_markov_state:", old_markov_state.shape)
+        #print("Shape new_env_state:", new_env_state.shape)
 
-        print("Shape new_env_state:", new_env_state.shape)
-
-        # TODO: move this pipeline part into a separate method and share it with init_markov_state(). 
-        if self.resize_visual_inputs:
-            resized = self.resize(new_env_state)
-            #image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
-            #resized = image.resize(self.resize_visual_inputs)
-            #resized.show()
-            #input('Confirm...')
-            new_env_state = np.expand_dims(np.array(resized), axis=0)
-
-        #print("Env to Markov")
-        #print("Type env state:", type(new_env_state))
-        #print("Shape env state:", new_env_state.shape)
-        #image = Image.fromarray(new_env_state[0].astype('uint8'), 'RGB')
-        #image.show('Title: RGB')
-        #time.sleep(5)
-        #input('Confirm...')
-
-        if self.grayscale_transform:
-            new_env_state = self.rgb2gray(new_env_state)            # Convert to grayscale
-            #image = Image.fromarray(new_env_state[0].astype('uint8'), 'L')
-            #image.show('Title: L')
-            #time.sleep(5)
-            #input('Confirm...')
-            new_env_state = np.expand_dims(new_env_state, axis=-1)  # Add extra dimension along which multiple images get stacked
-
-        #print('After transform:')
-        #print("Shape env state:", new_env_state.shape)
-        #print("Shape markov state:", old_markov_state.size())
+        # Preprocessing of new env state
+        new_env_state = self.preprocess_env_state(new_env_state)
 
         # Obtain information about the size of the portion of the Markov state to be dropped at the end
-        new_env_state = torch.tensor(new_env_state, dtype=torch.float)
         last_dim = new_env_state.shape[-1]
 
         # Obtain new Markov state by dropping oldest state, shifting all other states to the back, and adding latest
@@ -277,10 +251,6 @@ class ProximalPolicyOptimization:
 
     def learn(self):
         # Function to train the PPO agent
-        #print(type(gym.vector.make(id='Breakout-v0', num_envs=10, asynchronous=False).reset()))
-        #print(type(self.env.reset()))
-        #print(type(self.env))
-        #exit()
 
         # Evaluate the initial performance of policy network before training
         print('Initial demo:')
@@ -310,8 +280,8 @@ class ProximalPolicyOptimization:
 
                     # Predict action (actually being multiple parallel ones)
                     action = self.policy(state.to(self.device)).cpu()
-                    print("State.shape:", state.shape)
-                    print('action:', action.numpy())
+                    #print("State.shape:", state.shape)
+                    #print('action:', action.numpy())
 
                     # Perform action in env
                     next_state, reward, terminal_state, _ = self.env.step(action.numpy())
@@ -549,7 +519,7 @@ class ProximalPolicyOptimization:
         if self.deterministic_eval:
             env, state, total_rewards = self.random_env_start(env)
         else:
-            state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))  # TODO: remove expand_dims ?
+            state = self.init_markov_state(add_batch_dimension(env.reset()))  # TODO: remove expand_dims ?
 
         last_state = state.clone()
         sample_next_action_randomly = False
@@ -584,7 +554,7 @@ class ProximalPolicyOptimization:
                     time.sleep(0.2)
 
                 # Compute new Markov state
-                state = self.env2markov(state, np.expand_dims(next_state, axis=0))
+                state = self.env2markov(state, add_batch_dimension(next_state))
 
                 if terminal_state:
                     # Simulation has terminated
@@ -594,7 +564,7 @@ class ProximalPolicyOptimization:
                     if self.deterministic_eval:
                         env, state, total_rewards = self.random_env_start(env)
                     else:
-                        state = self.init_markov_state(np.expand_dims(env.reset(), axis=0))
+                        state = self.init_markov_state(add_batch_dimension(env.reset()))
 
                 # Check whether simulation is stuck
                 sample_next_action_randomly = simulation_is_stuck(last_state, state)
