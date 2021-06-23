@@ -4,19 +4,19 @@
     'grayscale_transform': True,
 	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 220000,
+    "total_num_state_transitions": 120000,
     "param_sharing": True,
 	'nonlinearity': 'relu',
 
-    "epochs": 3,
+    "epochs": 4,
     "parallel_agents": 8,
-    "trajectory_length": 1000,
+    "trajectory_length": 500,
     "discount_factor": 0.99,
     "batch_size": 32,
 
     "learning_rate_pol": {
 		'decay_type': 'linear',
-		'initial': 0.0003,
+		'initial': 0.00015,
 		'verbose': True,
 
 	},
@@ -25,13 +25,13 @@
 		#'decay_factor': 0.9,  # only used for exponential decay
 		#'initial': 0.03,
 		'decay_type': 'linear',
-		'initial': 0.0003,
+		'initial': 0.00015,
 		'verbose': True,
 
 	},
     "clipping_parameter": {
 		'decay_type': 'linear',
-		'max': .15,
+		'max': .1,
 		'min': 0.,
 	},
     "entropy_contrib_factor": 0.01,
@@ -40,7 +40,6 @@
     'show_final_demo': True,
     'deterministic_eval': True,
 	'time_steps_extensive_eval': 1000,
-    
     'intermediate_eval_steps': 1000,
     
     #'standard_dev': torch.ones,  # only used for continuous action spaces

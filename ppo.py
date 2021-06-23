@@ -7,12 +7,11 @@ import numpy as np
 from PIL import Image
 from policy import Policy
 from value_net import ValueNet
-import torch.nn.functional as F
 from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS
-from torch.optim.lr_scheduler import StepLR, ExponentialLR, LambdaLR
-from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state
+from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state, \
+    get_epsilon_evaluator, get_optimizer, get_lr_scheduler, get_non_linearity
 
 
 class ProximalPolicyOptimization:
@@ -66,33 +65,10 @@ class ProximalPolicyOptimization:
         self.time_steps_extensive_eval = time_steps_extensive_eval
         self.deterministic_eval = deterministic_eval
 
-        # Determine how to handle clipping constant - keep it constant or anneal from some max value to some min value
-        if isinstance(clipping_parameter, float):
-            # Keep clipping parameter epsilon constant
-            self._epsilon = torch.tensor(clipping_parameter, device=self.device, requires_grad=False)
-            self.epsilon = lambda _: self._epsilon
-
-        elif isinstance(clipping_parameter, dict):
-            # Anneal clipping parameter between some values (from max to min)
-            self._max_clipping_constant = clipping_parameter['max'] if 'max' in clipping_parameter.keys() else 1.
-            self._min_clipping_constant = clipping_parameter['min'] if 'min' in clipping_parameter.keys() else 0.
-
-            if clipping_parameter['decay_type'].lower() == 'linear':
-                # Clipping parameter epsilon gets linearly annealed from max to min throughout training
-                self.epsilon = lambda iteration: torch.tensor(
-                    max(self._min_clipping_constant,
-                        self._max_clipping_constant * ((self.iterations - iteration) / self.iterations)
-                    ), device=self.device, requires_grad=False)
-
-            elif clipping_parameter['decay_type'].lower() == 'exponential':
-                # Clipping parameter epsilon gets exponentially annealed from max to min throughout training
-                raise NotImplementedError("Exponential decay not implemented yet...")
-
-            else:
-                raise NotImplementedError("Decay can only be linear or exponential.")
-
-        else:
-            raise NotImplementedError("Clipping constant must be of type float or dict.")
+        # Epsilon will be a lambda function which always evaluates to the current value for the clipping parameter epsilon
+        self.epsilon = get_epsilon_evaluator(clipping_parameter=clipping_parameter,
+                                             device=self.device,
+                                             iterations=self.iterations)
 
         # Set up PyTorch functionality to grayscale visual state representations if required
         self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
@@ -120,14 +96,7 @@ class ProximalPolicyOptimization:
         }
 
         # Assign functional nonlinearity
-        if nonlinearity.lower() == 'relu':
-            nonlinearity = F.relu
-        elif nonlinearity.lower() == 'sigmoid':
-            nonlinearity = F.sigmoid
-        elif nonlinearity.lower() == 'tanh':
-            nonlinearity = F.tanh
-        else:
-            raise NotImplementedError("Only relu ")
+        nonlinearity = get_non_linearity(nonlinearity)
 
         # Create Gym env if not provided as such
         if isinstance(env, str):
@@ -166,58 +135,14 @@ class ProximalPolicyOptimization:
         # Create optimizers (for policy network and state value network respectively) + potentially respective learning
         # rate schedulers:
 
-        if isinstance(learning_rate_pol, float):
-            # Simple optimizer with constant learning rate for policy net
-            self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol)
-            self.lr_scheduler_pol = None
+        self.optimizer_p = get_optimizer(learning_rate=learning_rate_pol, model_parameters=self.policy.parameters())
+        self.lr_scheduler_pol = get_lr_scheduler(learning_rate=learning_rate_pol, optimizer=self.optimizer_p,
+                                                 iterations=self.iterations)
 
-        elif isinstance(learning_rate_pol, dict):
-            # Create optimizer plus a learning rate scheduler associated with optimizer
-            self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol['initial'])
+        self.optimizer_v = get_optimizer(learning_rate=learning_rate_val, model_parameters=self.val_net.parameters())
+        self.lr_scheduler_val = get_lr_scheduler(learning_rate=learning_rate_val, optimizer=self.optimizer_v,
+                                                 iterations=self.iterations)
 
-            # Whether learning rate scheduler shall print feedback or not
-            verbose = learning_rate_pol['verbose'] if 'verbose' in learning_rate_pol.keys() else False
-
-            if learning_rate_pol['decay_type'].lower() == 'linear':
-                lambda_lr = lambda epoch: (self.iterations - epoch) / self.iterations
-                self.lr_scheduler_pol = LambdaLR(self.optimizer_p, lr_lambda=lambda_lr, verbose=verbose)
-
-            elif learning_rate_pol['decay_type'].lower() == 'exponential':
-                decay_factor = learning_rate_pol['decay_factor'] if 'decay_factor' in learning_rate_pol.keys() else 0.9
-                self.lr_scheduler_pol = ExponentialLR(self.optimizer_p, gamma=decay_factor, verbose=verbose)
-
-            else:
-                raise NotImplementedError("Learning rate decay may only be linear or exponential.")
-
-        else:
-            raise NotImplementedError("learning_rate_pol must be (constant) float or dict.")
-
-        if isinstance(learning_rate_val, float):
-            # Simple optimizer with constant learning rate for value net
-            self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val)
-            self.lr_scheduler_val = None
-
-        elif isinstance(learning_rate_val, dict):
-            # Create optimizer plus a learning rate scheduler associated with optimizer
-            self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val['initial'])
-
-            # Whether learning rate scheduler shall print feedback or not
-            verbose = learning_rate_val['verbose'] if 'verbose' in learning_rate_val.keys() else False
-
-            if learning_rate_val['decay_type'].lower() == 'linear':
-                lambda_lr = lambda epoch: (self.iterations - epoch) / self.iterations
-                self.lr_scheduler_val = LambdaLR(self.optimizer_v, lr_lambda=lambda_lr, verbose=verbose)
-
-            elif learning_rate_val['decay_type'].lower() == 'exponential':
-                decay_factor = learning_rate_val['decay_factor'] if 'decay_factor' in learning_rate_val.keys() else 0.9
-                self.lr_scheduler_val = ExponentialLR(self.optimizer_v, gamma=decay_factor, verbose=verbose)
-
-            else:
-                raise NotImplementedError("Learning rate decay may only be linear or exponential.")
-
-
-        else:
-            raise NotImplementedError("learning_rate_val must be (constant) float or dict.")
 
         # Vectorize env for each parallel agent to get its own env instance
         self.env = gym.vector.make(id=self.env_name, num_envs=self.parallel_agents, asynchronous=False)
