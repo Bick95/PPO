@@ -16,15 +16,12 @@ class Policy(nn.Module):
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
                  observation_sample: torch.tensor,
                  input_net_type: str = 'CNN',
-                 standard_dev=torch.ones,
+                 standard_dev: float = 1.,
                  nonlinearity: torch.nn.functional = F.relu,
                  network_structure: list = None,
                  ):
 
         super(Policy, self).__init__()
-
-        # Save some data
-        self.std = standard_dev
 
         # Determine whether output distribution is to be Discrete or Continuous
         self.dist_type = dist_type
@@ -37,6 +34,9 @@ class Policy(nn.Module):
         else:
             # Assumption: no flattening needed!
             self.num_actions = action_space.shape[0]
+
+        # Assign tensor of standard deviations
+        self.std = torch.tensor([standard_dev] * self.num_actions, dtype=torch.float, requires_grad=False)
 
         # Assign input layer possibly consisting of multiple internal layers; Design dependent on nature of state observations
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
@@ -84,7 +84,7 @@ class Policy(nn.Module):
         if self.dist_type is DISCRETE:
             self.dist = self.prob_dist(probs=x)
         else:
-            self.dist = self.prob_dist(loc=x, scale=self.std(self.num_actions))
+            self.dist = self.prob_dist(loc=x, scale=self.std)
 
         action = self.dist.sample()
 

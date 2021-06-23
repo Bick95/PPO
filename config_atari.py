@@ -4,7 +4,7 @@
     'grayscale_transform': True,
 	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 200000,
+    "total_num_state_transitions": 400000,
     "param_sharing": True,
 
     "epochs": 3,
@@ -15,7 +15,7 @@
 
     "learning_rate_pol": {
 		'decay_type': 'linear',
-		'initial': 0.0002,
+		'initial': 0.0001,
 		'verbose': True,
 
 	},
@@ -24,7 +24,7 @@
 		#'decay_factor': 0.9,  # only used for exponential decay
 		#'initial': 0.03,
 		'decay_type': 'linear',
-		'initial': 0.0002,
+		'initial': 0.0001,
 		'verbose': True,
 
 	},
