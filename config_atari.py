@@ -4,18 +4,19 @@
     'grayscale_transform': True,
 	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 40000,
+    "total_num_state_transitions": 220000,
     "param_sharing": True,
+	'nonlinearity': 'relu',
 
     "epochs": 3,
     "parallel_agents": 8,
-    "trajectory_length": 128,
+    "trajectory_length": 1000,
     "discount_factor": 0.99,
     "batch_size": 32,
 
     "learning_rate_pol": {
 		'decay_type': 'linear',
-		'initial': 0.0001,
+		'initial': 0.0003,
 		'verbose': True,
 
 	},
@@ -24,13 +25,13 @@
 		#'decay_factor': 0.9,  # only used for exponential decay
 		#'initial': 0.03,
 		'decay_type': 'linear',
-		'initial': 0.0001,
+		'initial': 0.0003,
 		'verbose': True,
 
 	},
     "clipping_parameter": {
 		'decay_type': 'linear',
-		'max': .1,
+		'max': .15,
 		'min': 0.,
 	},
     "entropy_contrib_factor": 0.01,
@@ -42,7 +43,7 @@
     
     'intermediate_eval_steps': 1000,
     
-    #'standard_dev': torch.ones,
+    #'standard_dev': torch.ones,  # only used for continuous action spaces
     'network_structure': [
         # Dicts for conv layers
 		{
@@ -81,6 +82,5 @@
 		# Nr. of nodes for fully connected layers
 		256,
 		128,
-	]			
-    #'nonlinearity': F.relu
+	],
 }

@@ -23,12 +23,12 @@
     
     'intermediate_eval_steps': 100,
     
-    #'standard_dev': torch.ones,
+    #'standard_dev': torch.ones,  # only used for continuous action spaces
     'network_structure': [
 		# Nr. of nodes for fully connected layers
 		32,
 		64,
 		32,
 	]			
-    #'nonlinearity': F.relu
+    #'nonlinearity': 'relu'
 }
