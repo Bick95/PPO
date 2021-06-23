@@ -31,7 +31,7 @@ def save(args: json, attribute: str, saver):
         saver(getattr(args, attribute))
 
 
-def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict):
+def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict, config: json):
     # Saves all components that may be saved after a training run as requested by user through command line arguments
 
     if args.policy_net_path != '-':
@@ -49,3 +49,8 @@ def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict):
             os.makedirs(save_dir)
         # Save statistics
         plot_avg_trajectory_len(train_stats, save_path=args.graphic_path)
+
+    # Save config
+    with open(save_dir + '/config.json', 'w') as f:
+        json.dump(config, f)
+

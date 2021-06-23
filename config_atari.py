@@ -1,10 +1,10 @@
 {
-    "env": "Centipede-v0",
+    "env": "Breakout-v0",
     'input_net_type': 'CNN',  # vs 'MLP'
     'grayscale_transform': True,
 	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 120000,
+    "total_num_state_transitions": 200000,
     "param_sharing": True,
 
     "epochs": 3,
@@ -15,7 +15,7 @@
 
     "learning_rate_pol": {
 		'decay_type': 'linear',
-		'initial': 0.001,
+		'initial': 0.0002,
 		'verbose': True,
 
 	},
@@ -24,14 +24,14 @@
 		#'decay_factor': 0.9,  # only used for exponential decay
 		#'initial': 0.03,
 		'decay_type': 'linear',
-		'initial': 0.001,
+		'initial': 0.0002,
 		'verbose': True,
 
 	},
     "clipping_parameter": {
 		'decay_type': 'linear',
-		'max': .2,
-		'min': .01,
+		'max': .1,
+		'min': 0.,
 	},
     "entropy_contrib_factor": 0.01,
     "vf_contrib_factor": 1.,

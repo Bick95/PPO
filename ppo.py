@@ -333,7 +333,7 @@ class ProximalPolicyOptimization:
             #   1. Collecting new training data
             #   2. Updating nets based on newly generated training data
 
-            print('Iteration:', iteration, "\nEpsilon:", self.epsilon(iteration))
+            print('Iteration:', iteration+1, "of", self.iterations, "\nEpsilon:", self.epsilon(iteration))
 
             # Init data collection and storage for current iteration
             num_observed_train_steps = 0

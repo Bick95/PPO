@@ -59,7 +59,7 @@ def main(args):
         print(train_stats)
 
         # Save as requested
-        save_ppo(ppo=ppo, args=args, save_dir=save_dir, train_stats=train_stats)
+        save_ppo(ppo=ppo, args=args, save_dir=save_dir, train_stats=train_stats, config=config)
 
         print('Done.')
 
