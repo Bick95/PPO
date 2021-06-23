@@ -4,12 +4,12 @@
     'grayscale_transform': True,
 	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 400000,
+    "total_num_state_transitions": 40000,
     "param_sharing": True,
 
     "epochs": 3,
     "parallel_agents": 8,
-    "trajectory_length": 1000,
+    "trajectory_length": 128,
     "discount_factor": 0.99,
     "batch_size": 32,
 

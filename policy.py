@@ -36,7 +36,9 @@ class Policy(nn.Module):
             self.num_actions = action_space.shape[0]
 
         # Assign tensor of standard deviations
-        self.std = torch.tensor([standard_dev] * self.num_actions, dtype=torch.float, requires_grad=False)
+        std = [standard_dev] * self.num_actions
+        print(std)
+        self.std = torch.tensor(std, requires_grad=False)
 
         # Assign input layer possibly consisting of multiple internal layers; Design dependent on nature of state observations
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':

@@ -35,8 +35,8 @@ class ProximalPolicyOptimization:
                  input_net_type: str = 'MLP',
                  show_final_demo: bool = False,
                  intermediate_eval_steps: int = 200,
-                 standard_dev=torch.ones,
-                 nonlinearity: torch.nn.functional = F.relu,
+                 standard_dev: float = 1.,
+                 nonlinearity: str = 'relu',
                  markov_length: int = 1,  # How many environmental state get concatenated to one state representation
                  grayscale_transform: bool = False,  # Whether to transform RGB inputs to grayscale or not (if applicable)
                  network_structure: list = None,  # Replacement for hidden parameter,
@@ -118,6 +118,16 @@ class ProximalPolicyOptimization:
             'final_avg_traj_len': [],
             'final_acc_reward': [],
         }
+
+        # Assign functional nonlinearity
+        if nonlinearity.lower() == 'relu':
+            nonlinearity = F.relu
+        elif nonlinearity.lower() == 'sigmoid':
+            nonlinearity = F.sigmoid
+        elif nonlinearity.lower() == 'tanh':
+            nonlinearity = F.tanh
+        else:
+            raise NotImplementedError("Only relu ")
 
         # Create Gym env if not provided as such
         if isinstance(env, str):
