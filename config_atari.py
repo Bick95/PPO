@@ -1,28 +1,37 @@
 {
-    "env": "Breakout-v0",
+    "env": "Centipede-v0",
     'input_net_type': 'CNN',  # vs 'MLP'
     'grayscale_transform': True,
 	'resize_visual_inputs': (84, 84),
     'markov_length': 4,
-    "total_num_state_transitions": 100000,
+    "total_num_state_transitions": 120000,
     "param_sharing": True,
 
     "epochs": 3,
     "parallel_agents": 8,
-    "learning_rate_pol": {
-		'decay_type': 'linear',
-		'max': 0.001,
-		'min': 0.,
-	},
-    "learning_rate_val": 0.001,
-    "trajectory_length": 256,
+    "trajectory_length": 1000,
     "discount_factor": 0.99,
     "batch_size": 32,
-    
+
+    "learning_rate_pol": {
+		'decay_type': 'linear',
+		'initial': 0.001,
+		'verbose': True,
+
+	},
+    "learning_rate_val": {
+		#'decay_type': 'exponential',
+		#'decay_factor': 0.9,  # only used for exponential decay
+		#'initial': 0.03,
+		'decay_type': 'linear',
+		'initial': 0.001,
+		'verbose': True,
+
+	},
     "clipping_parameter": {
 		'decay_type': 'linear',
-		'max': .1,
-		'min': 0.,
+		'max': .2,
+		'min': .01,
 	},
     "entropy_contrib_factor": 0.01,
     "vf_contrib_factor": 1.,
@@ -37,9 +46,9 @@
     'network_structure': [
         # Dicts for conv layers
 		{
-			'out_channels': 32,  # 32 output channels = 32 filters
+			'out_channels': 64,  # 32 output channels = 32 filters
 			'kernel_size': 8,    # 8x8 kernel/filter size
-			'stride': 4,
+			'stride': 2,
 			'padding': 'automatically preserve input size',
 		},
 		{
@@ -70,7 +79,8 @@
 			'padding': 0,
 		},
 		# Nr. of nodes for fully connected layers
-		512,
+		256,
+		128,
 	]			
     #'nonlinearity': F.relu
 }

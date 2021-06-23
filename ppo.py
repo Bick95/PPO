@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS
+from torch.optim.lr_scheduler import StepLR, ExponentialLR, LambdaLR
 from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state
 
 
@@ -72,7 +73,7 @@ class ProximalPolicyOptimization:
             self.epsilon = lambda _: self._epsilon
 
         elif isinstance(clipping_parameter, dict):
-            # Anneal clipping parameter between some values
+            # Anneal clipping parameter between some values (from max to min)
             self._max_clipping_constant = clipping_parameter['max'] if 'max' in clipping_parameter.keys() else 1.
             self._min_clipping_constant = clipping_parameter['min'] if 'min' in clipping_parameter.keys() else 0.
 
@@ -93,9 +94,11 @@ class ProximalPolicyOptimization:
         else:
             raise NotImplementedError("Clipping constant must be of type float or dict.")
 
+        # Set up PyTorch functionality to grayscale visual state representations if required
         self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
         self.grayscale_layer = Grayscale(num_output_channels=1) if self.grayscale_transform else None
 
+        # Set up PyTorch functionality to resize visual state representations if required
         self.resize_transform = True if resize_visual_inputs else False
         self.resize_layer = Resize(size=resize_visual_inputs) if resize_visual_inputs else None
 
@@ -160,13 +163,21 @@ class ProximalPolicyOptimization:
 
         elif isinstance(learning_rate_pol, dict):
             # Create optimizer plus a learning rate scheduler associated with optimizer
-            self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol['max'])
+            self.optimizer_p = torch.optim.Adam(params=self.policy.parameters(), lr=learning_rate_pol['initial'])
+
+            # Whether learning rate scheduler shall print feedback or not
+            verbose = learning_rate_pol['verbose'] if 'verbose' in learning_rate_pol.keys() else False
 
             if learning_rate_pol['decay_type'].lower() == 'linear':
-                # TODO: define lambda
-                self.lr_scheduler_pol = None  # TODO: implement scheduler
+                lambda_lr = lambda epoch: (self.iterations - epoch) / self.iterations
+                self.lr_scheduler_pol = LambdaLR(self.optimizer_p, lr_lambda=lambda_lr, verbose=verbose)
+
+            elif learning_rate_pol['decay_type'].lower() == 'exponential':
+                decay_factor = learning_rate_pol['decay_factor'] if 'decay_factor' in learning_rate_pol.keys() else 0.9
+                self.lr_scheduler_pol = ExponentialLR(self.optimizer_p, gamma=decay_factor, verbose=verbose)
+
             else:
-                raise NotImplementedError("Currently, only linear learning rate decay is supported.")
+                raise NotImplementedError("Learning rate decay may only be linear or exponential.")
 
         else:
             raise NotImplementedError("learning_rate_pol must be (constant) float or dict.")
@@ -178,13 +189,21 @@ class ProximalPolicyOptimization:
 
         elif isinstance(learning_rate_val, dict):
             # Create optimizer plus a learning rate scheduler associated with optimizer
-            self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val['max'])
+            self.optimizer_v = torch.optim.Adam(params=self.val_net.parameters(), lr=learning_rate_val['initial'])
+
+            # Whether learning rate scheduler shall print feedback or not
+            verbose = learning_rate_val['verbose'] if 'verbose' in learning_rate_val.keys() else False
 
             if learning_rate_val['decay_type'].lower() == 'linear':
-                # TODO: define lambda
-                self.lr_scheduler_val = None  # TODO: implement scheduler
+                lambda_lr = lambda epoch: (self.iterations - epoch) / self.iterations
+                self.lr_scheduler_val = LambdaLR(self.optimizer_v, lr_lambda=lambda_lr, verbose=verbose)
+
+            elif learning_rate_val['decay_type'].lower() == 'exponential':
+                decay_factor = learning_rate_val['decay_factor'] if 'decay_factor' in learning_rate_val.keys() else 0.9
+                self.lr_scheduler_val = ExponentialLR(self.optimizer_v, gamma=decay_factor, verbose=verbose)
+
             else:
-                raise NotImplementedError("Currently, only linear learning rate decay is supported.")
+                raise NotImplementedError("Learning rate decay may only be linear or exponential.")
 
 
         else:
@@ -476,11 +495,12 @@ class ProximalPolicyOptimization:
                 iteration_loss += acc_epoch_loss
                 self.training_stats['devel_epoch_loss'].append(acc_epoch_loss)
 
-                if self.lr_scheduler_pol:
-                    self.lr_scheduler_pol.step()
+            # Potentially decrease learning rate every iteration
+            if self.lr_scheduler_pol:
+                self.lr_scheduler_pol.step()
 
-                if self.lr_scheduler_val:
-                    self.lr_scheduler_val.step()
+            if self.lr_scheduler_val:
+                self.lr_scheduler_val.step()
 
             # Document training progress at the end of a full iteration
             self.training_stats['devel_itera_loss'].append(iteration_loss)
