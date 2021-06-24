@@ -567,9 +567,9 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += reward
 
-                if render and t < min(time_steps, 500):
+                if render and t < min(time_steps, 5000):
                     env.render()
-                    time.sleep(0.1)
+                    time.sleep(0.001)
 
                 # Compute new Markov state
                 state = self.env2markov(state, add_batch_dimension(next_state))

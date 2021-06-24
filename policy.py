@@ -17,7 +17,7 @@ class Policy(nn.Module):
                  observation_sample: torch.tensor,
                  device: torch.device,
                  input_net_type: str = 'CNN',
-                 standard_dev: float = 1.,
+                 standard_dev: float = .2,
                  nonlinearity: torch.nn.functional = F.relu,
                  network_structure: list = None,
                  ):
