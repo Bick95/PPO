@@ -67,10 +67,11 @@ class Scheduler:
         # Decrease the scheduled value by one quantity
 
         if self.verbose:
-            print("Going to decrease", self.value_name, self.decay_type + "ly by factor", self.decay_rate, "to", str(self._step()) + ".")
+            print("Going to decrease", self.value_name, self.decay_type + "ly by factor {:.5f}".format(self.decay_rate),
+                  "to {:.5f}".format(self._step()) + ".")
 
         self.value = self._step()
 
 
     def get_value(self, parallel_agents: int = 1):
-        return torch.tensor([self.value] * parallel_agents, requires_grad=False, device=self.device)
+        return torch.tensor([[self.value]] * parallel_agents, requires_grad=False, device=self.device)

@@ -11,7 +11,7 @@ from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS
 from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state, \
-    get_epsilon_scheduler, get_optimizer, get_lr_scheduler, get_non_linearity
+    get_scheduler, get_optimizer, get_lr_scheduler, get_non_linearity
 
 
 class ProximalPolicyOptimization:
@@ -34,7 +34,7 @@ class ProximalPolicyOptimization:
                  input_net_type: str = 'MLP',
                  show_final_demo: bool = False,
                  intermediate_eval_steps: int = 200,
-                 standard_dev: float = 1.,
+                 standard_dev: float or dict = None,
                  nonlinearity: str = 'relu',
                  markov_length: int = 1,  # How many environmental state get concatenated to one state representation
                  grayscale_transform: bool = False,  # Whether to transform RGB inputs to grayscale or not (if applicable)
@@ -66,7 +66,7 @@ class ProximalPolicyOptimization:
         self.deterministic_eval = deterministic_eval
 
         # Epsilon will be a lambda function which always evaluates to the current value for the clipping parameter epsilon
-        self.epsilon = get_epsilon_scheduler(clipping_parameter=clipping_parameter,
+        self.epsilon = get_scheduler(clipping_parameter=clipping_parameter,
                                              device=self.device,
                                              train_iterations=self.iterations,
                                              parameter_name="Epsilon",
@@ -113,6 +113,9 @@ class ProximalPolicyOptimization:
 
         observation_sample = self.sample_observation_space()
 
+        if standard_dev is None:
+            standard_dev = 1.
+
         # Create policy net
         self.policy = Policy(action_space=self.action_space,
                              observation_sample=observation_sample,
@@ -121,8 +124,15 @@ class ProximalPolicyOptimization:
                              nonlinearity=nonlinearity,
                              standard_dev=standard_dev,
                              dist_type=self.dist_type,
-                             network_structure=network_structure
+                             network_structure=network_structure,
+                             iterations=self.iterations,
                              ).to(device=self.device)
+
+        # Save whether to decay standard deviation or not
+        if isinstance(standard_dev, float):
+            self.decay_standard_dev = False
+        else:
+            self.decay_standard_dev = True
 
         # Create value net (either sharing parameters with policy net or not)
         if param_sharing:
@@ -271,7 +281,7 @@ class ProximalPolicyOptimization:
             #   1. Collecting new training data
             #   2. Updating nets based on newly generated training data
 
-            print('Iteration:', iteration+1, "of", self.iterations, "\nEpsilon:", self.epsilon.value)
+            print('Iteration:', iteration+1, "of", self.iterations, "\nEpsilon: {:.2f}".format(self.epsilon.value))
 
             # Init data collection and storage for current iteration
             num_observed_train_steps = 0
@@ -388,8 +398,13 @@ class ProximalPolicyOptimization:
                     #print("advantage_:", advantage_, advantage_.shape)
 
                     # Compute log_prob for minibatch of actions
+                    #print(' Going to get log_probs')
+                    #print("state_.shape", state_.shape)
                     _ = self.policy(state_)
+                    #print("acts.shape", acts.shape)
                     log_prob = self.policy.log_prob(action_).squeeze()
+                    #print("log_prob.shape", log_prob.shape)
+                    #print("End.")
 
                     #print("log_prob_old_:", log_prob_old_, log_prob_old_.shape)
                     #print("log_prob:", log_prob, log_prob.shape)
@@ -439,6 +454,9 @@ class ProximalPolicyOptimization:
 
             if self.lr_scheduler_val:
                 self.lr_scheduler_val.step()
+
+            if self.decay_standard_dev:
+                self.policy.std.step()
 
             # Potentially decrease epsilon
             self.epsilon.step()

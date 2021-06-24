@@ -1,8 +1,10 @@
 import gym
+from scheduler import Scheduler
 import torch.nn.functional as F
 from input_net_modules import InMLP, InCNN
 from output_net_modules import OutMLP
 from constants import DISCRETE, CONTINUOUS
+from ppo_utils import get_scheduler
 
 import torch
 import torch.nn as nn
@@ -16,8 +18,9 @@ class Policy(nn.Module):
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
                  observation_sample: torch.tensor,
                  device: torch.device,
+                 iterations: int,
+                 standard_dev: float or dict,
                  input_net_type: str = 'CNN',
-                 standard_dev: float = .2,
                  nonlinearity: torch.nn.functional = F.relu,
                  network_structure: list = None,
                  ):
@@ -36,10 +39,6 @@ class Policy(nn.Module):
             # Assumption: no flattening needed!
             self.num_actions = action_space.shape[0]
 
-        # Assign tensor of standard deviations
-        std = [standard_dev] * self.num_actions
-        print(std)
-        self.std = torch.tensor(std, requires_grad=False, device=device)
 
         # Assign input layer possibly consisting of multiple internal layers; Design dependent on nature of state observations
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
@@ -78,6 +77,14 @@ class Policy(nn.Module):
         # To be assigned later (during execution). Will contain parameterized distribution (one per parallel agent)
         self.dist = None  # Will contain concrete probability distributions for sampling actions
 
+        # Get a scheduler for the standard deviation parameter in case of continuous action spaces
+        self.std = get_scheduler(clipping_parameter=standard_dev,
+                                 device=device,
+                                 train_iterations=iterations,
+                                 parameter_name="Standard Deviation",
+                                 verbose=True)
+
+
 
     def forward(self, x: torch.tensor):
 
@@ -87,7 +94,9 @@ class Policy(nn.Module):
         if self.dist_type is DISCRETE:
             self.dist = self.prob_dist(probs=x)
         else:
-            self.dist = self.prob_dist(loc=x, scale=self.std)
+            #print("x shape:", x.shape)
+            #print('Std:', self.std.get_value(x.shape[0]).shape)
+            self.dist = self.prob_dist(loc=x, scale=self.std.get_value(x.shape[0]))
 
         action = self.dist.sample()
 

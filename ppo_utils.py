@@ -48,8 +48,8 @@ def visualize_markov_state(state: np.ndarray or torch.tensor,
     input(confirm_message)
 
 
-def get_epsilon_scheduler(clipping_parameter: float or dict, device: torch.device, train_iterations: int,
-                          parameter_name: str = None, verbose: bool = False):
+def get_scheduler(clipping_parameter: float or dict, device: torch.device, train_iterations: int,
+                  parameter_name: str = None, verbose: bool = False):
     # Determine how to handle clipping constant - keep it constant or anneal from some max value to some min value
     # Do the scheduling via a scheduler
 
@@ -58,17 +58,20 @@ def get_epsilon_scheduler(clipping_parameter: float or dict, device: torch.devic
 
     elif isinstance(clipping_parameter, dict):
         # Anneal clipping parameter between some values (from max to min)
-        initial_value = clipping_parameter['max'] if 'max' in clipping_parameter.keys() else 1.
+        initial_value = clipping_parameter['initial'] if 'initial' in clipping_parameter.keys() else 1.
         min_value = clipping_parameter['min'] if 'min' in clipping_parameter.keys() else 0.
 
         # Decay type
         decay_type = clipping_parameter['decay_type'].lower() if 'decay_type' in clipping_parameter.keys() else 'linear'
 
         # Decay rate
-        decay_rate = clipping_parameter['decay_rate'].lower() if 'decay_rate' in clipping_parameter.keys() else None
+        decay_rate = clipping_parameter['decay_rate'] if 'decay_rate' in clipping_parameter.keys() else None
 
         # Decay steps
-        decay_steps = clipping_parameter['decay_steps'].lower() if 'decay_steps' in clipping_parameter.keys() else train_iterations
+        decay_steps = clipping_parameter['decay_steps'] if 'decay_steps' in clipping_parameter.keys() else train_iterations
+
+        # Verbose - overwrite default setting
+        verbose = clipping_parameter['verbose'] if 'verbose' in clipping_parameter.keys() else verbose
 
         return Scheduler(
             initial_value=initial_value,
