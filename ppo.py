@@ -115,6 +115,7 @@ class ProximalPolicyOptimization:
         self.policy = Policy(action_space=self.action_space,
                              observation_sample=observation_sample,
                              input_net_type=self.input_net_type,
+                             device=self.device,
                              nonlinearity=nonlinearity,
                              standard_dev=standard_dev,
                              dist_type=self.dist_type,
@@ -257,7 +258,7 @@ class ProximalPolicyOptimization:
         # Function to train the PPO agent
 
         # Evaluate the initial performance of policy network before training
-        print('Initial demo:')
+        print('Initial evaluation:')  # TODO: outsource evals into dedicated eval_and_document functions/methods
         total_rewards, avg_traj_len = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
         self.training_stats['init_acc_reward'].append(total_rewards)
         self.training_stats['init_avg_traj_len'].append(avg_traj_len)
@@ -438,6 +439,7 @@ class ProximalPolicyOptimization:
                 self.lr_scheduler_val.step()
 
             # Document training progress at the end of a full iteration
+            # TODO: outsource evals into dedicated eval_and_document functions/methods
             self.training_stats['devel_itera_loss'].append(iteration_loss)
             print('Average epoch loss of current iteration:', (iteration_loss/self.epochs))
             print("Current iteration's demo:")
@@ -450,7 +452,7 @@ class ProximalPolicyOptimization:
         self.env.close()
 
         # Final evaluation
-        print('Final demo:')
+        print('Final demo:') # TODO: outsource evals into dedicated eval_and_document functions/methods
         if self.show_final_demo:
             input("Waiting for user confirmation... Hit ENTER.")
             total_rewards, avg_traj_len = self.eval(time_steps=self.time_steps_extensive_eval, render=True)

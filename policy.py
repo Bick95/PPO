@@ -15,6 +15,7 @@ class Policy(nn.Module):
                  dist_type: int,
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
                  observation_sample: torch.tensor,
+                 device: torch.device,
                  input_net_type: str = 'CNN',
                  standard_dev: float = 1.,
                  nonlinearity: torch.nn.functional = F.relu,
@@ -38,7 +39,7 @@ class Policy(nn.Module):
         # Assign tensor of standard deviations
         std = [standard_dev] * self.num_actions
         print(std)
-        self.std = torch.tensor(std, requires_grad=False)
+        self.std = torch.tensor(std, requires_grad=False, device=device)
 
         # Assign input layer possibly consisting of multiple internal layers; Design dependent on nature of state observations
         if input_net_type.lower() == 'cnn' or input_net_type.lower() == 'visual':
