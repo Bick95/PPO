@@ -46,16 +46,14 @@ class Scheduler:
         elif self.decay_type.lower() == 'linear':
             # Handle cases where decay type is 'linear'
 
-            if self.decay_steps is None:
-                # If there is no time span provided, over which value is supposed to decay, take the decay_rate as
-                # linear quantity to be subtracted from value each time step
-                self._step = lambda: max(self.min_value, self.value - self.decay_rate)
-            else:
-                # We know over which time span to linearly anneal the initial value to min value
-                # 1. Compute decay rate
+            if self.decay_steps is not None:
+                # We know over which time span to linearly anneal the initial value to the min value
+                # Thus, compute the decay rate for linear decay
                 self.decay_rate = (self.value - self.min_value) / self.decay_steps
-                # 2. Compute function decaying the value each scheduler-step
-                self._step = lambda: max(self.min_value, self.value - self.decay_rate)
+
+            # After we know the decay rate (which is either provided or has been computed above), next compute function
+            # decaying the value each scheduler-step
+            self._step = lambda: max(self.min_value, self.value - self.decay_rate)
 
         elif self.decay_type.lower() == 'exponential':
             # Handle cases where decay type is 'exponential'

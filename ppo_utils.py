@@ -78,6 +78,7 @@ def get_epsilon_scheduler(clipping_parameter: float or dict, device: torch.devic
             device=device,
             min_value=min_value,
             value_name=parameter_name,
+            verbose=verbose
         )
 
     else:
