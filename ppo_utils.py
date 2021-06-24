@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from PIL import Image
 import torch.nn.functional as F
+from scheduler import Scheduler
 from torch.optim.lr_scheduler import ExponentialLR, LambdaLR
 
 
@@ -47,35 +48,40 @@ def visualize_markov_state(state: np.ndarray or torch.tensor,
     input(confirm_message)
 
 
-def get_epsilon_evaluator(clipping_parameter: float or dict, device: torch.device, iterations: int):
+def get_epsilon_scheduler(clipping_parameter: float or dict, device: torch.device, train_iterations: int,
+                          parameter_name: str = None, verbose: bool = False):
     # Determine how to handle clipping constant - keep it constant or anneal from some max value to some min value
+    # Do the scheduling via a scheduler
 
     if isinstance(clipping_parameter, float):
-        # Keep clipping parameter epsilon constant
-        _epsilon = torch.tensor(clipping_parameter, device=device, requires_grad=False)
-        return lambda _: _epsilon
+        return Scheduler(clipping_parameter, 'constant', device, value_name=parameter_name, verbose=verbose)
 
     elif isinstance(clipping_parameter, dict):
         # Anneal clipping parameter between some values (from max to min)
-        max_clipping_constant = clipping_parameter['max'] if 'max' in clipping_parameter.keys() else 1.
-        min_clipping_constant = clipping_parameter['min'] if 'min' in clipping_parameter.keys() else 0.
+        initial_value = clipping_parameter['max'] if 'max' in clipping_parameter.keys() else 1.
+        min_value = clipping_parameter['min'] if 'min' in clipping_parameter.keys() else 0.
 
-        if clipping_parameter['decay_type'].lower() == 'linear':
-            # Clipping parameter epsilon gets linearly annealed from max to min throughout training
-            return lambda iteration: torch.tensor(
-                max(min_clipping_constant,
-                    max_clipping_constant * ((iterations - iteration) / iterations)
-                    ), device=device, requires_grad=False)
+        # Decay type
+        decay_type = clipping_parameter['decay_type'].lower() if 'decay_type' in clipping_parameter.keys() else 'linear'
 
-        elif clipping_parameter['decay_type'].lower() == 'exponential':
-            # Clipping parameter epsilon gets exponentially annealed from max to min throughout training
-            raise NotImplementedError("Exponential decay not implemented yet...")
+        # Decay rate
+        decay_rate = clipping_parameter['decay_rate'].lower() if 'decay_rate' in clipping_parameter.keys() else None
 
-        else:
-            raise NotImplementedError("Decay can only be linear or exponential.")
+        # Decay steps
+        decay_steps = clipping_parameter['decay_steps'].lower() if 'decay_steps' in clipping_parameter.keys() else train_iterations
+
+        return Scheduler(
+            initial_value=initial_value,
+            decay_type=decay_type,
+            decay_rate=decay_rate,
+            decay_steps=decay_steps,
+            device=device,
+            min_value=min_value,
+            value_name=parameter_name,
+        )
 
     else:
-        raise NotImplementedError("Clipping constant must be of type float or dict.")
+        raise NotImplementedError("clipping_parameter mist be float or dict")
 
 
 def get_non_linearity(nonlinearity):

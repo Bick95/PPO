@@ -11,7 +11,7 @@ from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS
 from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state, \
-    get_epsilon_evaluator, get_optimizer, get_lr_scheduler, get_non_linearity
+    get_epsilon_scheduler, get_optimizer, get_lr_scheduler, get_non_linearity
 
 
 class ProximalPolicyOptimization:
@@ -66,9 +66,11 @@ class ProximalPolicyOptimization:
         self.deterministic_eval = deterministic_eval
 
         # Epsilon will be a lambda function which always evaluates to the current value for the clipping parameter epsilon
-        self.epsilon = get_epsilon_evaluator(clipping_parameter=clipping_parameter,
+        self.epsilon = get_epsilon_scheduler(clipping_parameter=clipping_parameter,
                                              device=self.device,
-                                             iterations=self.iterations)
+                                             train_iterations=self.iterations,
+                                             parameter_name="Epsilon",
+                                             verbose=True)
 
         # Set up PyTorch functionality to grayscale visual state representations if required
         self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
@@ -269,7 +271,7 @@ class ProximalPolicyOptimization:
             #   1. Collecting new training data
             #   2. Updating nets based on newly generated training data
 
-            print('Iteration:', iteration+1, "of", self.iterations, "\nEpsilon:", self.epsilon(iteration))
+            print('Iteration:', iteration+1, "of", self.iterations, "\nEpsilon:", self.epsilon.value)
 
             # Init data collection and storage for current iteration
             num_observed_train_steps = 0
@@ -438,6 +440,9 @@ class ProximalPolicyOptimization:
             if self.lr_scheduler_val:
                 self.lr_scheduler_val.step()
 
+            # Potentially decrease epsilon
+            self.epsilon.step()
+
             # Document training progress at the end of a full iteration
             # TODO: outsource evals into dedicated eval_and_document functions/methods
             self.training_stats['devel_itera_loss'].append(iteration_loss)
@@ -470,7 +475,7 @@ class ProximalPolicyOptimization:
         prob_ratio = torch.exp(log_prob - log_prob_old)
 
         unclipped = prob_ratio * advantage
-        clipped = torch.clip(prob_ratio, min=1.-self.epsilon(current_train_iteration), max=1.+self.epsilon(current_train_iteration)) * advantage
+        clipped = torch.clip(prob_ratio, min=1.-self.epsilon.value, max=1.+self.epsilon.value) * advantage
 
         return torch.mean(torch.min(unclipped, clipped))
 
