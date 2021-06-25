@@ -132,7 +132,7 @@ def get_lr_scheduler(learning_rate: float or dict, optimizer, iterations: int,
         initial_lr = learning_rate['initial'] if 'initial' in learning_rate.keys() else 0.0001
         decay_steps = learning_rate['decay_steps'] if 'decay_steps' in learning_rate.keys() else None
         decay_rate = learning_rate['decay_rate'] if 'decay_rate' in learning_rate.keys() else None
-        min_value = learning_rate['min_value'] if 'min_value' in learning_rate.keys() else None
+        min_value = learning_rate['min'] if 'min' in learning_rate.keys() else None
 
         if decay_steps or decay_rate or min_value is not None:
             # If settings are provided that could not be incorporated into PyTorch's own LR-schedulers, use a custom one
