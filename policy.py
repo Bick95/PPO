@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from input_net_modules import InMLP, InCNN
 from output_net_modules import OutMLP
 from constants import DISCRETE, CONTINUOUS
-from ppo_utils import get_scheduler
+from ppo_utils import get_scheduler, is_trainable, is_provided
 
 import torch
 import torch.nn as nn
@@ -27,15 +27,6 @@ class Policy(nn.Module):
 
         super(Policy, self).__init__()
 
-        # Get a scheduler for the standard deviation parameter in case of continuous action spaces
-        self.std = get_scheduler(clipping_parameter=standard_dev,
-                                 device=device,
-                                 train_iterations=iterations,
-                                 parameter_name="Standard Deviation",
-                                 verbose=True)
-
-        # Set a flag indicating that std is supposed to be trainable rather than a constant or to be annealed
-        self.train_std_flag = True if self.std is None else False
 
         # Determine whether output distribution is to be Discrete or Continuous
         self.dist_type = dist_type
@@ -48,6 +39,21 @@ class Policy(nn.Module):
         else:
             # Assumption: no flattening needed!
             self.num_actions = action_space.shape[0]
+
+
+        # Set a flag indicating whether std is supposed to be trainable rather than a constant or to be annealed instead
+        self.std_trainable = is_provided(standard_dev) and is_trainable(standard_dev)
+
+        if not self.std_trainable:
+            # Get a scheduler for the standard deviation parameter in case of continuous action spaces
+            self.std = get_scheduler(clipping_parameter=standard_dev,
+                                     device=device,
+                                     train_iterations=iterations,
+                                     parameter_name="Standard Deviation",
+                                     verbose=True)
+        else:
+            # If standard deviation is trainable, we don't need a scheduler for it
+            self.std = None
 
 
         # Assign input layer possibly consisting of multiple internal layers; Design dependent on nature of state observations
@@ -70,7 +76,7 @@ class Policy(nn.Module):
         input_features_output_module = self.input_module._modules[next(reversed(self.input_module._modules))].out_features
 
         # Automatically determine how many output nodes the output module/layer is gonna need to have
-        output_features_output_module = self.num_actions if not self.train_std_flag else 2*self.num_actions
+        output_features_output_module = self.num_actions if not self.std_trainable else 2 * self.num_actions
 
         # Assign (deterministic) output layer for generating parameterizations of probability distributions over action space to be defined below
         self.output_module = OutMLP(input_features=input_features_output_module,
@@ -97,26 +103,35 @@ class Policy(nn.Module):
             x = layer(x)
 
         if self.dist_type is DISCRETE:
-            # x contains vector of probability masses (per minibatch example)
-            self.dist = self.prob_dist(probs=x)
+            self.dist = self._forward_discrete(x)
 
         else:
-            # x contains either only the means for Gaussians or the means and the respective standard deviations if the latter is trainable
-
-            if self.train_std_flag:
-                # If standard deviation is trainable, only the first half of x contains the means, second half contains stds
-                mean = x[:self.num_actions]
-                std = x[self.num_actions:]
-                self.dist = self.prob_dist(loc=mean, scale=std)  # TODO: test this!
-
-            else:
-                # x contains only the means, while stds are provided by scheduler
-                self.dist = self.prob_dist(loc=x, scale=self.std.get_value(x.shape[0]))
+            self.dist = self._forward_continuous(x)
 
         action = self.dist.sample()
 
         return action
 
+
+    def _forward_discrete(self, x):
+        # Discrete action space: x contains vector of probability masses (per minibatch example) which is used to
+        # parameterize a respective categorical (i.e. multinomial) distribution
+        return self.prob_dist(probs=x)
+
+
+    def _forward_continuous(self, x):
+        # Continuous action space: x contains either only the means for Gaussians or the means and
+        # the respective standard deviations if the latter is trainable
+
+        if self.std_trainable:
+            # If standard deviation is trainable, only the first half of x contains the means, second half contains stds
+            mean = x[:, :self.num_actions]
+            std = torch.exp(x[:, self.num_actions:])  # Std deviation cannot be negative, thus the exponential function
+            return self.prob_dist(loc=mean, scale=std)
+
+        else:
+            # x contains only the means, while stds are provided by scheduler
+            return self.prob_dist(loc=x, scale=self.std.get_value(x.shape[0]))
 
     def forward_deterministic(self, x: torch.tensor):
         # Executes a standard forward pass through the policy, but then does not sample actions, but determines them deterministically
@@ -130,9 +145,10 @@ class Policy(nn.Module):
         else:
             #print("Parameterization continuous:", x)
 
-            if self.train_std_flag:
+            if self.std_trainable:
                 # If standard deviation is trainable, only the first half of x contains the means, i.e. the deterministic actions
-                action = x[:self.num_actions]
+                action = x[:, :self.num_actions]
+                #print('action_:', action)
             else:
                 action = x  # x contains the mean of a Gaussian per minibatch example. It's like sampling with 0 standard deviation
 

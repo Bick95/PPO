@@ -11,7 +11,7 @@ from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS
 from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state, \
-    get_scheduler, get_optimizer, get_lr_scheduler, get_non_linearity
+    get_scheduler, get_optimizer, get_lr_scheduler, get_non_linearity, is_trainable, nan_error, print_nan_error_loss
 
 
 class ProximalPolicyOptimization:
@@ -128,8 +128,15 @@ class ProximalPolicyOptimization:
                              iterations=self.iterations,
                              ).to(device=self.device)
 
+        # Determine whether standard deviation is a trainable parameter or not when facing continuous action space
+        if self.dist_type is CONTINUOUS and is_trainable(standard_dev):
+            self.std_trainable = True
+        else:
+            self.std_trainable = False
+
         # Save whether to decay standard deviation or not
-        if isinstance(standard_dev, float):
+        if isinstance(standard_dev, float) or self.std_trainable:
+            # Don't decay if standard deviation is a constant or trainable
             self.decay_standard_dev = False
         else:
             self.decay_standard_dev = True
@@ -331,12 +338,13 @@ class ProximalPolicyOptimization:
                         termination_mask = (1 - obs_temp[-1][4].int()).float()  # Only associate last observed state with valuation of 0 if it is terminal
                         target_state_val = target_state_val * termination_mask
 
+
                         # Compute the target state value and advantage estimate for each state in agent's trajectory
                         # (batch-wise for all parallel agents in parallel)
                         for t in range(len(obs_temp)-1, -1, -1):
                             # Compute target state value:
                             # V^{target}_t = r_t + \gamma * r_{t+1} + ... + \gamma^{n-1} * r_{t+n-1} + \gamma^n * V(s_{t+n}), where t+n=T
-                            target_state_val = obs_temp[t][2] + self.gamma * target_state_val
+                            target_state_val = obs_temp[t][2] + self.gamma * target_state_val  # <- reward r_t obtained in state s_t + discounted future reward
 
                             # Compute advantage estimate
                             state_val = self.val_net(obs_temp[t][0].to(self.device).squeeze(1)).squeeze().cpu()  # V(s_t)
@@ -390,29 +398,14 @@ class ProximalPolicyOptimization:
                         action_ = torch.vstack(action).squeeze().to(self.device)        # Minibatch of actions
                     else:
                         action_ = torch.vstack(action).to(self.device)                  # Minibatch of actions
-
-                    #print("State_ shape:", state_.shape)
-                    #print("action_:", action_, action_.shape)
-                    #print("log_prob_old_:", log_prob_old_, log_prob_old_.shape)
-                    #print("target_state_val_:", target_state_val_, target_state_val_.shape)
-                    #print("advantage_:", advantage_, advantage_.shape)
+                    #print('action_:', action_)
 
                     # Compute log_prob for minibatch of actions
-                    #print(' Going to get log_probs')
-                    #print("state_.shape", state_.shape)
                     _ = self.policy(state_)
-                    #print("acts.shape", acts.shape)
                     log_prob = self.policy.log_prob(action_).squeeze()
-                    #print("log_prob.shape", log_prob.shape)
-                    #print("End.")
-
-                    #print("log_prob_old_:", log_prob_old_, log_prob_old_.shape)
-                    #print("log_prob:", log_prob, log_prob.shape)
 
                     # Compute current state value estimates
                     state_val = self.val_net(state_).squeeze()
-
-                    #print("state_val:", state_val)
 
                     # Evaluate loss function first component-wise, then combined:
                     # L^{CLIP}
@@ -421,8 +414,9 @@ class ProximalPolicyOptimization:
                     # L^{V}
                     L_V = self.L_VF(state_val, target_state_val_)
 
-                    if self.dist_type == DISCRETE:
-                        # Adding entropy is only needed in discrete case, since standard deviation is fixed in continuous case
+                    if self.dist_type == DISCRETE or self.std_trainable:
+                        # An entropy bonus is added only if the agent faces a discrete action space or if we manually
+                        # declare that the standard deviation is trainable in continuous action spaces
 
                         # H (= Entropy)
                         L_ENTROPY = self.L_ENTROPY()
@@ -433,6 +427,13 @@ class ProximalPolicyOptimization:
                     else:
                         # L^{CLIP + H + V} = L^{CLIP} + h*H + v*L^{V}
                         loss = - L_CLIP + self.v * L_V
+
+                    if nan_error(loss):
+                        if self.dist_type == DISCRETE or self.std_trainable:
+                            print_nan_error_loss(loss, L_CLIP, L_V, action_, log_prob, log_prob_old_, state_, state_val, L_ENTROPY)
+                        else:
+                            print_nan_error_loss(loss, L_CLIP, L_V, action_, log_prob, log_prob_old_, state_, state_val)
+                        raise OverflowError('Loss is nan. See print statement above.')
 
                     # Backprop loss
                     loss.backward()
@@ -573,6 +574,7 @@ class ProximalPolicyOptimization:
 
         with torch.no_grad():  # No need to compute gradients here
             for t in range(time_steps):
+                #print("state:", state, state.shape)
 
                 # Select action
                 if sample_next_action_randomly:
@@ -587,14 +589,19 @@ class ProximalPolicyOptimization:
 
                 # Perform action in env (taking into consideration various input-output behaviors of Gym envs')
                 try:
+                    #print("action:", action, action.shape)
                     # Some envs require actions of format: 1.0034
                     next_state, reward, terminal_state, _ = env.step(action)
+                    #print("reward:", reward)
                 except IndexError:
+                    #print("action2:", action)
                     # Some envs require actions of format: [1.0034]
                     next_state, reward, terminal_state, _ = env.step([action])
+                    #print("reward2:", reward)
 
                 # Count accumulative rewards
                 total_rewards += reward
+                #print("total_rewards:", total_rewards)
 
                 if render and t < min(time_steps, 5000):
                     env.render()

@@ -4,6 +4,7 @@ from PIL import Image
 import torch.nn.functional as F
 from scheduler import Scheduler
 from torch.optim.lr_scheduler import ExponentialLR, LambdaLR
+from lr_scheduler import CustomLRScheduler
 
 
 def add_batch_dimension(state: np.ndarray):
@@ -116,7 +117,8 @@ def get_optimizer(learning_rate: float or dict, model_parameters):
         raise NotImplementedError("learning_rate must be (constant) float or dict.")
 
 
-def get_lr_scheduler(learning_rate: float or dict, optimizer, iterations: int):
+def get_lr_scheduler(learning_rate: float or dict, optimizer, iterations: int,
+                     value_name: str = 'Learning Rate to be decreased', device: torch.device = None):
 
     if isinstance(learning_rate, float):
         # Simple optimizer with constant learning rate for neural net, thus no scheduler needed
@@ -126,16 +128,60 @@ def get_lr_scheduler(learning_rate: float or dict, optimizer, iterations: int):
         # Whether learning rate scheduler shall print feedback or not
         verbose = learning_rate['verbose'] if 'verbose' in learning_rate.keys() else False
 
-        if learning_rate['decay_type'].lower() == 'linear':
+        decay_type = learning_rate['decay_type'].lower()
+        initial_lr = learning_rate['initial'] if 'initial' in learning_rate.keys() else 0.0001
+        decay_steps = learning_rate['decay_steps'] if 'decay_steps' in learning_rate.keys() else None
+        decay_rate = learning_rate['decay_rate'] if 'decay_rate' in learning_rate.keys() else None
+        min_value = learning_rate['min_value'] if 'min_value' in learning_rate.keys() else None
+
+        if decay_steps or decay_rate or min_value is not None:
+            # If settings are provided that could not be incorporated into PyTorch's own LR-schedulers, use a custom one
+            return CustomLRScheduler(optimizer=optimizer, initial_value=initial_lr,
+                                     decay_type=decay_type, decay_steps=decay_steps,
+                                     decay_rate=decay_rate, min_value=min_value, value_name=value_name, verbose=verbose)
+
+        elif decay_type == 'linear':
             lambda_lr = lambda epoch: (iterations - epoch) / iterations
             return LambdaLR(optimizer, lr_lambda=lambda_lr, verbose=verbose)
 
-        elif learning_rate['decay_type'].lower() == 'exponential':
+        elif decay_type == 'exponential':
             decay_factor = learning_rate['decay_factor'] if 'decay_factor' in learning_rate.keys() else 0.9
             return ExponentialLR(optimizer, gamma=decay_factor, verbose=verbose)
+
+        elif decay_type == 'constant':
+            raise NotImplementedError("Provide a float value as learning rate parameter when intending to keep learning rate constant.")
 
         else:
             raise NotImplementedError("Learning rate decay may only be linear or exponential.")
 
     else:
         raise NotImplementedError("learning_rate_pol must be (constant) float or dict.")
+
+
+
+def is_provided(param):
+    # Returns whether a parameter is provided or not
+    if param is not None:
+        return True
+    return False
+
+
+def is_trainable(param):
+    # Returns true if a provided parameter is trainable or not
+    if isinstance(param, dict) and 'decay_type' in param.keys() and param['decay_type'] == 'trainable':
+        return True
+    return False
+
+
+def nan_error(tensor):
+    return torch.isnan(tensor).any()
+
+
+def print_nan_error_loss(loss, L_CLIP, L_V, action, log_prob, log_prob_old, state, state_val, L_ENTROPY=None):
+    print(
+        "Loss happened to be nan. This indicates loss terms going out of bounds. Please check your hyperparameters once again.")
+    print('Values were as follows:\n')
+    print('Loss:', loss, '\nL_CLIP:', L_CLIP, '\nL_V:', L_V)
+    print('L_ENTROPY:', L_ENTROPY if L_ENTROPY else 'N/A')
+    print('action:', action, '\nlog_prob:', log_prob, '\nlog_prob_old:', log_prob_old)
+    print('state:', state, '\nstate_val:', state_val)

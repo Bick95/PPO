@@ -2,13 +2,13 @@ import torch
 import numpy as np
 
 
-class Scheduler:
+class CustomLRScheduler:
 
     def __init__(self,
+                 optimizer,
                  initial_value: float or int,
                  decay_type: str,
-                 device: torch.device,
-                 decay_rate: float = 0.9,
+                 decay_rate: float = None,
                  decay_steps: int = None,
                  min_value: float or int = None,
                  value_name: str = None,
@@ -17,14 +17,15 @@ class Scheduler:
 
         # Keeps track of and decays a given value in a given way
 
+        self.optimizer = optimizer
+
         self.value = float(initial_value)
 
         self.decay_type = decay_type
-        self.decay_rate = float(decay_rate) if decay_rate is not None else decay_rate
-        self.decay_steps = float(decay_steps) if decay_steps is not None else decay_steps
-        self.min_value = float(min_value) if min_value is not None else min_value
-        self.value_name = value_name if value_name is not None else 'value to be scheduled'
-        self.device = device
+        self.decay_rate = float(decay_rate) if decay_rate is not None else 0.9
+        self.decay_steps = float(decay_steps) if decay_steps is not None else None
+        self.min_value = float(min_value) if min_value is not None else None
+        self.value_name = value_name if value_name is not None else 'Learning Rate to be scheduled'
         self.verbose = verbose
 
         self._step = None  # Internal step function decrementing self.value each time that step()-method is invoked
@@ -69,10 +70,11 @@ class Scheduler:
 
         if self.verbose:
             print("Going to decrease", self.value_name, self.decay_type + "ly by factor {:.5f}".format(self.decay_rate),
-                  "to {:.5f}".format(self._step()) + ".")
+                  "to {:.10f}".format(self._step()) + ".")
 
+        # Update current learning rate
         self.value = self._step()
 
-
-    def get_value(self, parallel_agents: int = 1):
-        return torch.tensor([[self.value]] * parallel_agents, requires_grad=False, device=self.device)
+        # Update learning rate to previously computed new value
+        for g in self.optimizer.param_groups:
+            g['lr'] = self.value
