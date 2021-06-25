@@ -64,6 +64,10 @@ def get_scheduler(clipping_parameter: float or dict, device: torch.device, train
         # Decay type
         decay_type = clipping_parameter['decay_type'].lower() if 'decay_type' in clipping_parameter.keys() else 'linear'
 
+        if decay_type == 'trainable':
+            # If parameter is not supposed to be annealed, but to be trained, return None
+            return None
+
         # Decay rate
         decay_rate = clipping_parameter['decay_rate'] if 'decay_rate' in clipping_parameter.keys() else None
 

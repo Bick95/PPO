@@ -27,6 +27,16 @@ class Policy(nn.Module):
 
         super(Policy, self).__init__()
 
+        # Get a scheduler for the standard deviation parameter in case of continuous action spaces
+        self.std = get_scheduler(clipping_parameter=standard_dev,
+                                 device=device,
+                                 train_iterations=iterations,
+                                 parameter_name="Standard Deviation",
+                                 verbose=True)
+
+        # Set a flag indicating that std is supposed to be trainable rather than a constant or to be annealed
+        self.train_std_flag = True if self.std is None else False
+
         # Determine whether output distribution is to be Discrete or Continuous
         self.dist_type = dist_type
         # NOTE!
@@ -59,9 +69,12 @@ class Policy(nn.Module):
         # Automatically determine how many input nodes the output module/layer is gonna need to have
         input_features_output_module = self.input_module._modules[next(reversed(self.input_module._modules))].out_features
 
+        # Automatically determine how many output nodes the output module/layer is gonna need to have
+        output_features_output_module = self.num_actions if not self.train_std_flag else 2*self.num_actions
+
         # Assign (deterministic) output layer for generating parameterizations of probability distributions over action space to be defined below
         self.output_module = OutMLP(input_features=input_features_output_module,
-                                    output_features=self.num_actions,
+                                    output_features=output_features_output_module,
                                     output_type=self.dist_type
                                     )
 
@@ -77,14 +90,6 @@ class Policy(nn.Module):
         # To be assigned later (during execution). Will contain parameterized distribution (one per parallel agent)
         self.dist = None  # Will contain concrete probability distributions for sampling actions
 
-        # Get a scheduler for the standard deviation parameter in case of continuous action spaces
-        self.std = get_scheduler(clipping_parameter=standard_dev,
-                                 device=device,
-                                 train_iterations=iterations,
-                                 parameter_name="Standard Deviation",
-                                 verbose=True)
-
-
 
     def forward(self, x: torch.tensor):
 
@@ -92,11 +97,21 @@ class Policy(nn.Module):
             x = layer(x)
 
         if self.dist_type is DISCRETE:
+            # x contains vector of probability masses (per minibatch example)
             self.dist = self.prob_dist(probs=x)
+
         else:
-            #print("x shape:", x.shape)
-            #print('Std:', self.std.get_value(x.shape[0]).shape)
-            self.dist = self.prob_dist(loc=x, scale=self.std.get_value(x.shape[0]))
+            # x contains either only the means for Gaussians or the means and the respective standard deviations if the latter is trainable
+
+            if self.train_std_flag:
+                # If standard deviation is trainable, only the first half of x contains the means, second half contains stds
+                mean = x[:self.num_actions]
+                std = x[self.num_actions:]
+                self.dist = self.prob_dist(loc=mean, scale=std)  # TODO: test this!
+
+            else:
+                # x contains only the means, while stds are provided by scheduler
+                self.dist = self.prob_dist(loc=x, scale=self.std.get_value(x.shape[0]))
 
         action = self.dist.sample()
 
@@ -114,7 +129,12 @@ class Policy(nn.Module):
             action = torch.argmax(x, dim=-1)  # Choose for every minibatch example the action with largest probability mass
         else:
             #print("Parameterization continuous:", x)
-            action = x  # x contains the mean of a Gaussian per minibatch example. It's like sampling with 0 standard deviation
+
+            if self.train_std_flag:
+                # If standard deviation is trainable, only the first half of x contains the means, i.e. the deterministic actions
+                action = x[:self.num_actions]
+            else:
+                action = x  # x contains the mean of a Gaussian per minibatch example. It's like sampling with 0 standard deviation
 
         #print("Action:", action)
         return action

@@ -539,6 +539,12 @@ class ProximalPolicyOptimization:
             json.dump(self.training_stats, outfile)
         print('Saved training stats.')
 
+
+    def log_eval_stats(self):
+        pass
+        # TODO: implement logging of evaluation statistics
+
+
     def eval(self, time_steps: int = None, render=False):
 
         # Let a single agent interact with its env for a given nr of time steps and obtain performance stats
