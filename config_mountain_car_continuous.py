@@ -4,19 +4,11 @@
     'grayscale_transform': False,
     'markov_length': 10,
     'dilation': 2,
-    "total_num_state_transitions": 2000000,
+    "total_num_state_transitions": 3000000,
     "param_sharing": True,
     'nonlinearity': 'relu',
 
-    'standard_dev': {
-		#'decay_type': 'linear',
-        'decay_type': 'trainable',
-        #'decay_steps': 50,
-        #'decay_rate': 0.01,
-		#'initial': 1.,
-		#'min': .05,
-        'verbose': True
-	},  # only used for continuous action spaces
+    'standard_dev': 0.7,  # only used for continuous action spaces
 
     "epochs": 6,
     "batch_size": 32,

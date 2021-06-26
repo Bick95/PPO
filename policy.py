@@ -103,23 +103,23 @@ class Policy(nn.Module):
             x = layer(x)
 
         if self.dist_type is DISCRETE:
-            self.dist = self._forward_discrete(x)
+            self.dist = self.parameterize_discrete_distribution(x)
 
         else:
-            self.dist = self._forward_continuous(x)
+            self.dist = self.parameterize_continuous_distribution(x)
 
         action = self.dist.sample()
 
         return action
 
 
-    def _forward_discrete(self, x):
+    def parameterize_discrete_distribution(self, x):
         # Discrete action space: x contains vector of probability masses (per minibatch example) which is used to
         # parameterize a respective categorical (i.e. multinomial) distribution
         return self.prob_dist(probs=x)
 
 
-    def _forward_continuous(self, x):
+    def parameterize_continuous_distribution(self, x):
         # Continuous action space: x contains either only the means for Gaussians or the means and
         # the respective standard deviations if the latter is trainable
 
