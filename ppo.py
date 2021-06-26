@@ -9,7 +9,7 @@ from policy import Policy
 from value_net import ValueNet
 from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
-from constants import DISCRETE, CONTINUOUS
+from constants import DISCRETE, CONTINUOUS, INITIAL, INTERMEDIATE, FINAL
 from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state, \
     get_scheduler, get_optimizer, get_lr_scheduler, get_non_linearity, is_trainable, nan_error, print_nan_error_loss
 
@@ -93,13 +93,13 @@ class ProximalPolicyOptimization:
             # How average accumulated over all epochs develops per iteration
             'devel_itera_loss': [],
 
-            'init_avg_traj_len': [],
+            'init_total_restarts': [],
             'init_acc_reward': [],
 
-            'train_avg_traj_len': [],
+            'train_total_restarts': [],
             'train_acc_reward': [],
 
-            'final_avg_traj_len': [],
+            'final_total_restarts': [],
             'final_acc_reward': [],
         }
 
@@ -283,10 +283,7 @@ class ProximalPolicyOptimization:
         # Function to train the PPO agent
 
         # Evaluate the initial performance of policy network before training
-        print('Initial evaluation:')  # TODO: outsource evals into dedicated eval_and_document functions/methods
-        total_rewards, avg_traj_len = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
-        self.training_stats['init_acc_reward'].append(total_rewards)
-        self.training_stats['init_avg_traj_len'].append(avg_traj_len)
+        self.eval_and_log(eval_type=INITIAL)
 
         # Start training
         for iteration in range(self.iterations):
@@ -323,7 +320,7 @@ class ProximalPolicyOptimization:
                         if terminal_state.any():
                             break
 
-                    if (accumulated_reward > 0).any():
+                    if (accumulated_reward >= 0).any():
                         print("++++ ---- SUCCESS! ---- ++++")
 
                     # Transform latest observations to tensor data
@@ -464,7 +461,7 @@ class ProximalPolicyOptimization:
 
                 # Document training progress after one full epoch/iteration of training
                 iteration_loss += acc_epoch_loss
-                self.training_stats['devel_epoch_loss'].append(acc_epoch_loss)
+                self.training_stats['devel_epoch_loss'].append(acc_epoch_loss)  # TODO: outsource
 
             # Potentially decrease learning rate every iteration
             if self.lr_scheduler_pol:
@@ -480,27 +477,17 @@ class ProximalPolicyOptimization:
             self.epsilon.step()
 
             # Document training progress at the end of a full iteration
-            # TODO: outsource evals into dedicated eval_and_document functions/methods
-            self.training_stats['devel_itera_loss'].append(iteration_loss)
-            print('Average epoch loss of current iteration:', (iteration_loss/self.epochs))
-            print("Current iteration's demo:")
-            total_rewards, avg_traj_len = self.eval()
-            self.training_stats['train_acc_reward'].append(total_rewards)
-            self.training_stats['train_avg_traj_len'].append(avg_traj_len)
+            self.log_train_stats(iteration_loss=iteration_loss)
+            self.training_stats['devel_itera_loss'].append(iteration_loss)  # TODO: outsource
+            print('Average epoch loss of current iteration:', (iteration_loss/self.epochs))  # TODO: outsource
+            self.eval_and_log(eval_type=INTERMEDIATE)
             print()
 
         # Clean up after training
         self.env.close()
 
         # Final evaluation
-        print('Final demo:') # TODO: outsource evals into dedicated eval_and_document functions/methods
-        if self.show_final_demo:
-            input("Waiting for user confirmation... Hit ENTER.")
-            total_rewards, avg_traj_len = self.eval(time_steps=self.time_steps_extensive_eval, render=True)
-        else:
-            total_rewards, avg_traj_len = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
-        self.training_stats['final_acc_reward'].append(total_rewards)
-        self.training_stats['final_avg_traj_len'].append(avg_traj_len)
+        self.eval_and_log(eval_type=FINAL)
 
         return self.training_stats
 
@@ -559,9 +546,34 @@ class ProximalPolicyOptimization:
         print('Saved training stats.')
 
 
-    def log_eval_stats(self):
-        pass
-        # TODO: implement logging of evaluation statistics
+    def eval_and_log(self, eval_type: int):
+
+        if eval_type == INITIAL:
+            print('Initial evaluation:')
+            total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
+            self.training_stats['init_acc_reward'].append(total_rewards)
+            self.training_stats['init_total_restarts'].append(total_restarts)
+
+        elif eval_type == INTERMEDIATE:
+            print("Current iteration's demo:")
+            total_rewards, _, total_restarts = self.eval()
+            self.training_stats['train_acc_reward'].append(total_rewards)
+            self.training_stats['train_total_restarts'].append(total_restarts)
+
+        elif eval_type == FINAL:
+            print('Final demo:')
+            if self.show_final_demo:
+                input("Waiting for user confirmation... Hit ENTER.")
+                total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=True)
+            else:
+                total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
+            self.training_stats['final_acc_reward'].append(total_rewards)
+            self.training_stats['final_total_restarts'].append(total_restarts)
+
+
+    def log_train_stats(self, iteration_loss):
+        self.training_stats['devel_itera_loss'].append(iteration_loss)
+        print('Average epoch loss of current iteration:', (iteration_loss / self.epochs))
 
 
     def eval(self, time_steps: int = None, render=False):
@@ -574,13 +586,17 @@ class ProximalPolicyOptimization:
         total_rewards = 0.
         total_restarts = 1.
 
+        # Make testing environment
         env = gym.make(self.env_name)
+
+        # Initialize testing environment - either for deterministic evaluation or for stochastic evaluation (depending
+        # on setting)
         if self.deterministic_eval:
             env, state, total_rewards = self.random_env_start(env)
         else:
             state = self.init_markov_state(add_batch_dimension(env.reset()))
 
-        # Uncomment for debugging purposes or to see how states are represented:
+        # Uncomment for debugging purposes or to see how states are represented in visual state observation setting:
         #visualize_markov_state(state=state,
         #                       env_state_depth=self.depth_processed_env_state,
         #                       markov_length=self.markov_length,
@@ -588,11 +604,12 @@ class ProximalPolicyOptimization:
         #                       confirm_message='Confirm Eval Init state (1)')
 
         last_state = state.clone()
+
+        # Flag indicating whether next action has to be sampled randomly to recover from stuck simulation state
         sample_next_action_randomly = False
 
         with torch.no_grad():  # No need to compute gradients here
-            for t in range(time_steps):
-                #print("state:", state, state.shape)
+            for t in range(time_steps):  # Run the simulation for some time steps
 
                 # Select action
                 if sample_next_action_randomly:
@@ -615,12 +632,9 @@ class ProximalPolicyOptimization:
                         # Sum rewards over time steps
                         accumulated_reward += reward
 
-                        # If either env is done, step repeating actions
+                        # If env is done, i.e. simulation has terminated, stop repeating actions
                         if terminal_state:
                             break
-
-                    if accumulated_reward > 0:
-                        print("++++ ---- SUCCESS (Eval)! ---- ++++")
 
                 except IndexError:
                     for _ in range(self.dilation):
@@ -630,12 +644,12 @@ class ProximalPolicyOptimization:
                         # Sum rewards over time steps
                         accumulated_reward += reward
 
-                        # If either env is done, step repeating actions
+                        # If env is done, i.e. simulation has terminated, stop repeating actions
                         if terminal_state:
                             break
 
-                    if accumulated_reward > 0:
-                        print("++++ ---- SUCCESS (Eval)! ---- ++++")
+                if accumulated_reward >= 0:
+                    print("++++ ---- SUCCESS (Eval)! ---- ++++")
 
                 # Count accumulative rewards
                 total_rewards += accumulated_reward
@@ -647,7 +661,7 @@ class ProximalPolicyOptimization:
                 # Compute new Markov state
                 state = self.env2markov(state, add_batch_dimension(next_state))
 
-                # Uncomment for debugging purposed or to see how states are represented:
+                # Uncomment for debugging purposes or to see how states are represented in visual state observation setting:
                 #visualize_markov_state(state=state,
                 #                       env_state_depth=self.depth_processed_env_state,
                 #                       markov_length=self.markov_length,
@@ -664,7 +678,8 @@ class ProximalPolicyOptimization:
                     else:
                         state = self.init_markov_state(add_batch_dimension(env.reset()))
 
-                # Check whether simulation is stuck
+                # Check whether simulation is stuck: If simulation is stuck in same state, the agent needs to sample
+                # some different action during the next time step, thus random sampling...
                 sample_next_action_randomly = simulation_is_stuck(last_state, state)
 
                 # Book-keeping
@@ -675,6 +690,6 @@ class ProximalPolicyOptimization:
         avg_traj_len = time_steps / total_restarts
 
         print('Total accumulated reward over', time_steps, 'time steps:', total_rewards)
-        print('Average trajectory length in time steps:', avg_traj_len)
+        print('Average trajectory length in time steps given', total_restarts, ' restarts:', avg_traj_len)
 
-        return total_rewards, avg_traj_len
+        return total_rewards, avg_traj_len, total_restarts

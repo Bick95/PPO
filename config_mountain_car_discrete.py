@@ -24,7 +24,7 @@
 	},
     "learning_rate_val": {
 		'decay_type': 'exponential',
-        'decay_rate': 0.8,
+        'decay_rate': 0.9,
 		'initial_value': 0.00002,
         'min_value': 0.0000001,
 		'verbose': True,
@@ -32,7 +32,7 @@
     
     "clipping_parameter": {
 		'decay_type': 'exponential',
-        'decay_rate': 0.95,
+        'decay_rate': 0.9,
 		'initial_value': .15,
 		'min_value': .02,
         'verbose': True
