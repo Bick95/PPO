@@ -1,6 +1,6 @@
 {
     "env": "MountainCarContinuous-v0",
-    'input_net_type': 'MLP',  # vs 'CNN'
+    'input_net_type': 'MLP',
     'grayscale_transform': False,
     'markov_length': 10,
     'dilation': 2,
@@ -18,22 +18,22 @@
 
     "learning_rate_pol": {
 		'decay_type': 'exponential',
-        'decay_rate': 0.9,
+        'decay_rate': 0.95,
 		'initial_value': 0.00002,
-        'min_value': 0.0000001,
+        'min_value': 0.000017,
 		'verbose': True,
 	},
     "learning_rate_val": {
 		'decay_type': 'exponential',
-        'decay_rate': 0.8,
+        'decay_rate': 0.85,
 		'initial_value': 0.00002,
-        'min_value': 0.0000001,
+        'min_value': 0.000017,
 		'verbose': True,
 	},
     
     "clipping_parameter": {
 		'decay_type': 'exponential',
-        'decay_rate': 0.95,
+        'decay_rate': 0.96,
 		'initial_value': .15,
 		'min_value': .02,
         'verbose': True
