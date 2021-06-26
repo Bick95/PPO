@@ -2,8 +2,9 @@
     "env": "MountainCarContinuous-v0",
     'input_net_type': 'MLP',  # vs 'CNN'
     'grayscale_transform': False,
-    'markov_length': 2,
-    "total_num_state_transitions": 10000000,
+    'markov_length': 10,
+    'dilation': 2,
+    "total_num_state_transitions": 2000000,
     "param_sharing": True,
     'nonlinearity': 'relu',
 
@@ -17,25 +18,25 @@
         'verbose': True
 	},  # only used for continuous action spaces
 
-    "epochs": 5,
+    "epochs": 6,
     "batch_size": 32,
 
-    "parallel_agents": 10,
+    "parallel_agents": 12,
     "trajectory_length": 4000,
 
     "learning_rate_pol": {
 		'decay_type': 'exponential',
-        'decay_rate': 0.8,
-		'initial': 0.00001,
-        'min': 0.000001,
+        'decay_rate': 0.9,
+		'initial': 0.00002,
+        'min': 0.0000001,
 		'verbose': True,
         #'decay_steps': 50,
 	},
     "learning_rate_val": {
 		'decay_type': 'exponential',
         'decay_rate': 0.8,
-		'initial': 0.00001,
-        'min': 0.000001,
+		'initial': 0.00002,
+        'min': 0.0000001,
 		'verbose': True,
         #'decay_steps': 50,
 	},
@@ -62,8 +63,8 @@
 
     'network_structure': [
 		# Nr. of nodes for fully connected layers
-        32,
-		64,
+        64,
+		128,
 		32,
 	],
 }

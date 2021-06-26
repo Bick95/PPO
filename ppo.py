@@ -41,6 +41,7 @@ class ProximalPolicyOptimization:
                  network_structure: list = None,  # Replacement for hidden parameter,
                  deterministic_eval: bool = False,  # Whether to compute actions stochastically or deterministically throughout evaluation
                  resize_visual_inputs: tuple = None,
+                 dilation: int = 1,  # How many times to execute a generated action
                  ):
 
         # Decide on which device to run model: CUDA/GPU vs CPU
@@ -64,6 +65,7 @@ class ProximalPolicyOptimization:
         self.markov_length = markov_length
         self.time_steps_extensive_eval = time_steps_extensive_eval
         self.deterministic_eval = deterministic_eval
+        self.dilation = dilation
 
         # Epsilon will be a lambda function which always evaluates to the current value for the clipping parameter epsilon
         self.epsilon = get_scheduler(clipping_parameter=clipping_parameter,
@@ -305,11 +307,23 @@ class ProximalPolicyOptimization:
                     # Predict action (actually being multiple parallel ones)
                     action = self.policy(state.to(self.device)).cpu()
 
-                    # Perform action in env
-                    next_state, reward, terminal_state, _ = self.env.step(action.numpy())
+                    # Perform action in env (self.dilation times)
+                    accumulated_reward = torch.zeros((self.parallel_agents,))
+                    for _ in range(self.dilation):
+                        next_state, reward, terminal_state, _ = self.env.step(action.numpy())
+
+                        # Sum rewards over time steps
+                        accumulated_reward += reward
+
+                        # If either env is done, step repeating actions
+                        if terminal_state.any():
+                            break
+
+                    if (accumulated_reward > 0).any():
+                        print("++++ ---- SUCCESS! ---- ++++")
 
                     # Transform latest observations to tensor data
-                    reward = torch.tensor(reward)
+                    reward = accumulated_reward
                     next_state = self.env2markov(state, next_state)     # Note: state == Markov state, next_state == state as returned by env
                     terminal_state = torch.tensor(terminal_state)       # Boolean indicating whether one of parallel envs has terminated or not
 
@@ -588,20 +602,40 @@ class ProximalPolicyOptimization:
                         action = self.policy(state.to(self.device)).squeeze().cpu().numpy()
 
                 # Perform action in env (taking into consideration various input-output behaviors of Gym envs')
+                accumulated_reward = 0.
                 try:
-                    #print("action:", action, action.shape)
-                    # Some envs require actions of format: 1.0034
-                    next_state, reward, terminal_state, _ = env.step(action)
-                    #print("reward:", reward)
+                    for _ in range(self.dilation):
+                        # Some envs require actions of format: 1.0034
+                        next_state, reward, terminal_state, _ = env.step(action)
+                        print("Reward1:", reward)
+
+                        # Sum rewards over time steps
+                        accumulated_reward += reward
+
+                        # If either env is done, step repeating actions
+                        if terminal_state:
+                            break
+
+                    if accumulated_reward > 0:
+                        print("++++ ---- SUCCESS (Eval)! ---- ++++")
+
                 except IndexError:
-                    #print("action2:", action)
-                    # Some envs require actions of format: [1.0034]
-                    next_state, reward, terminal_state, _ = env.step([action])
-                    #print("reward2:", reward)
+                    for _ in range(self.dilation):
+                        # Some envs require actions of format: [1.0034]
+                        next_state, reward, terminal_state, _ = env.step([action])
+
+                        # Sum rewards over time steps
+                        accumulated_reward += reward
+
+                        # If either env is done, step repeating actions
+                        if terminal_state:
+                            break
+
+                    if accumulated_reward > 0:
+                        print("++++ ---- SUCCESS (Eval)! ---- ++++")
 
                 # Count accumulative rewards
-                total_rewards += reward
-                #print("total_rewards:", total_rewards)
+                total_rewards += accumulated_reward
 
                 if render and t < min(time_steps, 5000):
                     env.render()
