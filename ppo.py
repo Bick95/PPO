@@ -409,10 +409,9 @@ class ProximalPolicyOptimization:
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze().to(self.device)
 
                     if self.dist_type == DISCRETE:
-                        action_ = torch.vstack(action).squeeze().to(self.device)        # Minibatch of actions
+                        action_ = torch.vstack(action).to(self.device)        # Minibatch of actions
                     else:
                         action_ = torch.vstack(action).to(self.device)                  # Minibatch of actions
-                    #print('action_:', action_)
 
                     # Compute log_prob for minibatch of actions
                     _ = self.policy(state_)
@@ -524,6 +523,7 @@ class ProximalPolicyOptimization:
 
 
     def save_policy_net(self, path_policy: str = './policy_model.pt'):
+        del self.policy.std  # Scheduler object can't be saved as part of a model; would break the saving process
         torch.save(self.policy, path_policy)
         print('Saved policy net.')
 
@@ -607,7 +607,6 @@ class ProximalPolicyOptimization:
                     for _ in range(self.dilation):
                         # Some envs require actions of format: 1.0034
                         next_state, reward, terminal_state, _ = env.step(action)
-                        print("Reward1:", reward)
 
                         # Sum rewards over time steps
                         accumulated_reward += reward

@@ -1,14 +1,12 @@
 {
-    "env": "MountainCarContinuous-v0",
-    'input_net_type': 'MLP',  # vs 'CNN'
+    "env": "MountainCar-v0",
+    'input_net_type': 'MLP',
     'grayscale_transform': False,
     'markov_length': 10,
     'dilation': 2,
     "total_num_state_transitions": 3000000,
     "param_sharing": True,
     'nonlinearity': 'relu',
-
-    'standard_dev': 0.7,  # only used for continuous action spaces
 
     "epochs": 6,
     "batch_size": 32,
@@ -22,6 +20,7 @@
 		'initial': 0.00002,
         'min': 0.0000001,
 		'verbose': True,
+        #'decay_steps': 50,
 	},
     "learning_rate_val": {
 		'decay_type': 'exponential',
