@@ -17,24 +17,24 @@
     "learning_rate_pol": {
 		'decay_type': 'exponential',
         'decay_rate': 0.9,
-		'initial': 0.00002,
-        'min': 0.0000001,
+		'initial_value': 0.00002,
+        'min_value': 0.0000001,
 		'verbose': True,
         #'decay_steps': 50,
 	},
     "learning_rate_val": {
 		'decay_type': 'exponential',
         'decay_rate': 0.8,
-		'initial': 0.00002,
-        'min': 0.0000001,
+		'initial_value': 0.00002,
+        'min_value': 0.0000001,
 		'verbose': True,
 	},
     
     "clipping_parameter": {
 		'decay_type': 'exponential',
         'decay_rate': 0.95,
-		'initial': .15,
-		'min': .02,
+		'initial_value': .15,
+		'min_value': .02,
         'verbose': True
 	},
 
@@ -43,6 +43,7 @@
     "vf_contrib_factor": 1.,
     
     'show_final_demo': True,
+    'frame_duration': 0.001,  # Indicates how long rendered frames are shown to yield a nice and smooth visualization
     'deterministic_eval': True,
     
     'intermediate_eval_steps': 1000,

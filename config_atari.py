@@ -16,23 +16,23 @@
 
     "learning_rate_pol": {
 		'decay_type': 'linear',
-		'initial': 0.00015,
+		'initial_value': 0.00015,
 		'verbose': True,
 
 	},
     "learning_rate_val": {
 		#'decay_type': 'exponential',
 		#'decay_factor': 0.9,  # only used for exponential decay
-		#'initial': 0.03,
+		#'initial_value': 0.03,
 		'decay_type': 'linear',
-		'initial': 0.00015,
+		'initial_value': 0.00015,
 		'verbose': True,
 
 	},
     "clipping_parameter": {
 		'decay_type': 'linear',
-		'max': .1,
-		'min': 0.,
+		'initial_value': .1,
+		'min_value': 0.,
 	},
     "entropy_contrib_factor": 0.01,
     "vf_contrib_factor": 1.,

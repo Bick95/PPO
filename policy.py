@@ -18,7 +18,7 @@ class Policy(nn.Module):
                  action_space: gym.spaces.Discrete or gym.spaces.Box,
                  observation_sample: torch.tensor,
                  device: torch.device,
-                 iterations: int,
+                 train_iterations: int,
                  standard_dev: float or dict,
                  input_net_type: str = 'CNN',
                  nonlinearity: torch.nn.functional = F.relu,
@@ -48,7 +48,7 @@ class Policy(nn.Module):
             # Get a scheduler for the standard deviation parameter in case of continuous action spaces
             self.std = get_scheduler(clipping_parameter=standard_dev,
                                      device=device,
-                                     train_iterations=iterations,
+                                     train_iterations=train_iterations,
                                      parameter_name="Standard Deviation",
                                      verbose=True)
         else:

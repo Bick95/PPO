@@ -42,6 +42,8 @@ class ProximalPolicyOptimization:
                  deterministic_eval: bool = False,  # Whether to compute actions stochastically or deterministically throughout evaluation
                  resize_visual_inputs: tuple = None,
                  dilation: int = 1,  # How many times to execute a generated action
+                 frame_duration: float or int = 0.001,
+                 max_render_time_steps: int = 5000,
                  ):
 
         # Decide on which device to run model: CUDA/GPU vs CPU
@@ -66,13 +68,15 @@ class ProximalPolicyOptimization:
         self.time_steps_extensive_eval = time_steps_extensive_eval
         self.deterministic_eval = deterministic_eval
         self.dilation = dilation
+        self.frame_duration = float(frame_duration)
+        self.max_render_time_steps = max_render_time_steps
 
         # Epsilon will be a lambda function which always evaluates to the current value for the clipping parameter epsilon
         self.epsilon = get_scheduler(clipping_parameter=clipping_parameter,
-                                             device=self.device,
-                                             train_iterations=self.iterations,
-                                             parameter_name="Epsilon",
-                                             verbose=True)
+                                     device=self.device,
+                                     train_iterations=self.iterations,
+                                     parameter_name="Epsilon",
+                                     verbose=True)
 
         # Set up PyTorch functionality to grayscale visual state representations if required
         self.grayscale_transform = (input_net_type.lower() == "cnn" or input_net_type.lower() == "visual") and grayscale_transform
@@ -127,7 +131,7 @@ class ProximalPolicyOptimization:
                              standard_dev=standard_dev,
                              dist_type=self.dist_type,
                              network_structure=network_structure,
-                             iterations=self.iterations,
+                             train_iterations=self.iterations,
                              ).to(device=self.device)
 
         # Determine whether standard deviation is a trainable parameter or not when facing continuous action space
@@ -159,11 +163,11 @@ class ProximalPolicyOptimization:
 
         self.optimizer_p = get_optimizer(learning_rate=learning_rate_pol, model_parameters=self.policy.parameters())
         self.lr_scheduler_pol = get_lr_scheduler(learning_rate=learning_rate_pol, optimizer=self.optimizer_p,
-                                                 iterations=self.iterations)
+                                                 train_iterations=self.iterations)
 
         self.optimizer_v = get_optimizer(learning_rate=learning_rate_val, model_parameters=self.val_net.parameters())
         self.lr_scheduler_val = get_lr_scheduler(learning_rate=learning_rate_val, optimizer=self.optimizer_v,
-                                                 iterations=self.iterations)
+                                                 train_iterations=self.iterations)
 
 
         # Vectorize env for each parallel agent to get its own env instance
@@ -636,9 +640,9 @@ class ProximalPolicyOptimization:
                 # Count accumulative rewards
                 total_rewards += accumulated_reward
 
-                if render and t < min(time_steps, 5000):
+                if render and t < min(time_steps, self.max_render_time_steps):
                     env.render()
-                    time.sleep(0.001)
+                    time.sleep(self.frame_duration)
 
                 # Compute new Markov state
                 state = self.env2markov(state, add_batch_dimension(next_state))
