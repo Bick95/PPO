@@ -55,8 +55,7 @@ def get_scheduler(clipping_parameter: float or dict, device: torch.device, train
     # Do the scheduling via a scheduler
 
     if isinstance(clipping_parameter, float):
-        return Scheduler(clipping_parameter, 'constant', device, value_name=parameter_name, verbose=verbose,
-                         train_iterations=train_iterations)
+        return Scheduler(clipping_parameter, 'constant', device, value_name=parameter_name, verbose=verbose)
 
     elif isinstance(clipping_parameter, dict):
         # Anneal clipping parameter between some values (from max to min)
@@ -81,7 +80,6 @@ def get_scheduler(clipping_parameter: float or dict, device: torch.device, train
 
         return Scheduler(
             initial_value=initial_value,
-            train_iterations=train_iterations,
             decay_type=decay_type,
             decay_rate=decay_rate,
             decay_steps=decay_steps,
@@ -139,7 +137,7 @@ def get_lr_scheduler(learning_rate: float or dict, optimizer, train_iterations: 
         if decay_steps or decay_rate or min_value is not None:
             # If settings are provided that could not be incorporated into PyTorch's own LR-schedulers, use a custom one
             return CustomLRScheduler(optimizer=optimizer, initial_value=initial_lr,
-                                     decay_type=decay_type, decay_steps=decay_steps, train_iterations=train_iterations,
+                                     decay_type=decay_type, decay_steps=decay_steps,
                                      decay_rate=decay_rate, min_value=min_value, value_name=value_name, verbose=verbose)
 
         elif decay_type == 'linear':
