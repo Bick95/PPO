@@ -46,7 +46,7 @@ class Policy(nn.Module):
 
         if not self.std_trainable:
             # Get a scheduler for the standard deviation parameter in case of continuous action spaces
-            self.std = get_scheduler(clipping_parameter=standard_dev,
+            self.std = get_scheduler(parameter=standard_dev,
                                      device=device,
                                      train_iterations=train_iterations,
                                      parameter_name="Standard Deviation",

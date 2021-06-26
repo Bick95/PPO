@@ -49,34 +49,27 @@ def visualize_markov_state(state: np.ndarray or torch.tensor,
     input(confirm_message)
 
 
-def get_scheduler(clipping_parameter: float or dict, device: torch.device, train_iterations: int,
+def get_scheduler(parameter: float or dict, device: torch.device, train_iterations: int,
                   parameter_name: str = None, verbose: bool = False):
     # Determine how to handle clipping constant - keep it constant or anneal from some max value to some min value
     # Do the scheduling via a scheduler
 
-    if isinstance(clipping_parameter, float):
-        return Scheduler(clipping_parameter, 'constant', device, value_name=parameter_name, verbose=verbose)
+    if isinstance(parameter, float):
+        return Scheduler(parameter, 'constant', device, value_name=parameter_name, verbose=verbose)
 
-    elif isinstance(clipping_parameter, dict):
-        # Anneal clipping parameter between some values (from max to min)
-        initial_value = clipping_parameter['initial_value'] if 'initial_value' in clipping_parameter.keys() else 1.
-        min_value = clipping_parameter['min_value'] if 'min_value' in clipping_parameter.keys() else 0.
+    elif isinstance(parameter, dict):
+        # Anneal clipping parameter between some values (from max to min) - Create a scheduler for that
 
-        # Decay type
-        decay_type = clipping_parameter['decay_type'].lower() if 'decay_type' in clipping_parameter.keys() else 'linear'
+        initial_value = parameter['initial_value'] if 'initial_value' in parameter.keys() else None
+        min_value = parameter['min_value'] if 'min_value' in parameter.keys() else None
+        decay_type = parameter['decay_type'].lower() if 'decay_type' in parameter.keys() else None
+        decay_rate = parameter['decay_rate'] if 'decay_rate' in parameter.keys() else None
+        decay_steps = parameter['decay_steps'] if 'decay_steps' in parameter.keys() else train_iterations
+        verbose = parameter['verbose'] if 'verbose' in parameter.keys() else verbose
 
-        if decay_type == 'trainable':
+        if decay_type is not None and decay_type == 'trainable':
             # If parameter is not supposed to be annealed, but to be trained, return None
             return None
-
-        # Decay rate
-        decay_rate = clipping_parameter['decay_rate'] if 'decay_rate' in clipping_parameter.keys() else None
-
-        # Decay steps
-        decay_steps = clipping_parameter['decay_steps'] if 'decay_steps' in clipping_parameter.keys() else train_iterations
-
-        # Verbose - overwrite default setting
-        verbose = clipping_parameter['verbose'] if 'verbose' in clipping_parameter.keys() else verbose
 
         return Scheduler(
             initial_value=initial_value,
@@ -90,7 +83,7 @@ def get_scheduler(clipping_parameter: float or dict, device: torch.device, train
         )
 
     else:
-        raise NotImplementedError("clipping_parameter mist be float or dict")
+        raise NotImplementedError("parameter must be float or dict")
 
 
 def get_non_linearity(nonlinearity):
@@ -128,12 +121,13 @@ def get_lr_scheduler(learning_rate: float or dict, optimizer, train_iterations: 
         # Whether learning rate scheduler shall print feedback or not
         verbose = learning_rate['verbose'] if 'verbose' in learning_rate.keys() else False
 
-        decay_type = learning_rate['decay_type'].lower()
-        initial_lr = learning_rate['initial_value'] if 'initial_value' in learning_rate.keys() else 0.0001
+        decay_type = learning_rate['decay_type'].lower() if 'decay_type' in learning_rate.keys() else None
+        initial_lr = learning_rate['initial_value'] if 'initial_value' in learning_rate.keys() else None
         decay_steps = learning_rate['decay_steps'] if 'decay_steps' in learning_rate.keys() else None
         decay_rate = learning_rate['decay_rate'] if 'decay_rate' in learning_rate.keys() else None
         min_value = learning_rate['min_value'] if 'min_value' in learning_rate.keys() else None
 
+        # Choose which scheduler to return
         if decay_steps or decay_rate or min_value is not None:
             # If settings are provided that could not be incorporated into PyTorch's own LR-schedulers, use a custom one
             return CustomLRScheduler(optimizer=optimizer, initial_value=initial_lr,

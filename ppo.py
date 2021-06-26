@@ -72,7 +72,7 @@ class ProximalPolicyOptimization:
         self.max_render_time_steps = max_render_time_steps
 
         # Epsilon will be a lambda function which always evaluates to the current value for the clipping parameter epsilon
-        self.epsilon = get_scheduler(clipping_parameter=clipping_parameter,
+        self.epsilon = get_scheduler(parameter=clipping_parameter,
                                      device=self.device,
                                      train_iterations=self.iterations,
                                      parameter_name="Epsilon",
