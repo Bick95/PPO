@@ -2,7 +2,7 @@ import ast
 import torch
 import argparse
 from ppo import ProximalPolicyOptimization as PPO
-from utils.utils_main import get_unique_save_path, save_ppo
+from utils_main import get_unique_save_path, save_ppo
 
 # Path to directory where to save all data to be saved after training
 save_dir = './train_results/' + get_unique_save_path() + '/'

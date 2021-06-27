@@ -8,7 +8,9 @@
     "param_sharing": True,
     'nonlinearity': 'relu',
 
-    'standard_dev': 0.7,  # only used for continuous action spaces
+    'standard_dev': {
+        'decay_type': 'trainable',
+    },
 
     "epochs": 6,
     "batch_size": 32,
