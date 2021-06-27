@@ -613,7 +613,7 @@ class ProximalPolicyOptimization:
             time_steps = self.intermediate_eval_steps
 
         total_rewards = 0.
-        total_restarts = 1.
+        total_restarts = 1
 
         # Make testing environment
         env = gym.make(self.env_name)
@@ -720,6 +720,6 @@ class ProximalPolicyOptimization:
         avg_traj_len = time_steps / total_restarts
 
         print('Total accumulated reward over', time_steps, 'time steps: {:.2f}'.format(total_rewards))
-        print('Average trajectory length in time steps given', total_restarts, ' restarts: {:.2f}'.format(avg_traj_len))
+        print('Average trajectory length in time steps given', total_restarts, 'restarts: {:.2f}'.format(avg_traj_len))
 
         return total_rewards, avg_traj_len, total_restarts
