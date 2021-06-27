@@ -365,7 +365,6 @@ class ProximalPolicyOptimization:
                         termination_mask = (1 - obs_temp[-1][4].int()).float()  # Only associate last observed state with valuation of 0 if it is terminal
                         target_state_val = target_state_val * termination_mask
 
-
                         # Compute the target state value and advantage estimate for each state in agent's trajectory
                         # (batch-wise for all parallel agents in parallel)
                         for t in range(len(obs_temp)-1, -1, -1):
@@ -416,15 +415,15 @@ class ProximalPolicyOptimization:
                     state, action, _, _, _, log_prob_old, target_state_val, advantage = zip(*minibatch)
 
                     # Transform batch of tuples to batch tensors
-                    state_ = torch.vstack(state).to(self.device)      # Minibatch of states
+                    state_ = torch.vstack(state).to(self.device)         # Minibatch of states
                     target_state_val_ = torch.vstack(target_state_val).squeeze().to(self.device)
                     advantage_ = torch.vstack(advantage).squeeze().to(self.device)
                     log_prob_old_ = torch.vstack(log_prob_old).squeeze().to(self.device)
 
                     if self.dist_type == DISCRETE:
-                        action_ = torch.vstack(action).to(self.device)        # Minibatch of actions
+                        action_ = torch.vstack(action).squeeze().to(self.device)  # Minibatch of actions
                     else:
-                        action_ = torch.vstack(action).to(self.device)                  # Minibatch of actions
+                        action_ = torch.vstack(action).to(self.device)            # Minibatch of actions
 
                     # Compute log_prob for minibatch of actions
                     _ = self.policy(state_)
