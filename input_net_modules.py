@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from input_net_modules_utils import extract_params_from_structure, size_preserving_padding, out_dim
+from utils.utils_input_net_modules import extract_params_from_structure, size_preserving_padding, out_dim
 
 
 class InCNN(nn.Module):
