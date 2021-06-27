@@ -578,6 +578,7 @@ class ProximalPolicyOptimization:
             print('Final demo(s):')
             # Final demos can be both deterministic and stochastic in order to demonstrate the difference between the two
             if self.deterministic_eval:
+                print('Going to perform deterministic evaluation.')
                 if self.show_final_demo:
                     # Wait for user to confirm that (s)he is ready to witness the final demo
                     input("Waiting for user confirmation... Hit ENTER.")
@@ -588,6 +589,7 @@ class ProximalPolicyOptimization:
                 self.log('final_det_total_restarts', total_restarts)
 
             if self.stochastic_eval:
+                print('Going to perform stochastic evaluation.')
                 if self.show_final_demo:
                     # Wait for user to confirm that (s)he is ready to witness the final demo
                     input("Waiting for user confirmation... Hit ENTER.")
