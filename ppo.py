@@ -40,6 +40,7 @@ class ProximalPolicyOptimization:
                  grayscale_transform: bool = False,  # Whether to transform RGB inputs to grayscale or not (if applicable)
                  network_structure: list = None,  # Replacement for hidden parameter,
                  deterministic_eval: bool = False,  # Whether to compute actions stochastically or deterministically throughout evaluation
+                 stochastic_eval: bool = False,
                  resize_visual_inputs: tuple = None,
                  dilation: int = 1,  # How many times to execute a generated action
                  frame_duration: float or int = 0.001,
@@ -67,6 +68,7 @@ class ProximalPolicyOptimization:
         self.markov_length = markov_length
         self.time_steps_extensive_eval = time_steps_extensive_eval
         self.deterministic_eval = deterministic_eval
+        self.stochastic_eval = stochastic_eval
         self.dilation = dilation
         self.frame_duration = float(frame_duration)
         self.max_render_time_steps = max_render_time_steps
@@ -102,12 +104,19 @@ class ProximalPolicyOptimization:
             'train_total_restarts': [],
             # Total reward accumulated over given trajectory length during intermediate testing
             'train_acc_reward': [],
-
-            # Total nr of restarts per given trajectory length during final testing
-            'final_total_restarts': [],
-            # Total reward accumulated over given trajectory length during final testing
-            'final_acc_reward': [],
         }
+
+        if self.deterministic_eval:
+            # Total nr of restarts per given trajectory length during final testing when using deterministic generation of actions
+            self.training_stats['final_det_total_restarts'] = []
+            # Total reward accumulated over given trajectory length during final testing when using deterministic generation of actions
+            self.training_stats['final_det_acc_reward'] = []
+
+        if self.stochastic_eval:
+            # Total nr of restarts per given trajectory length during final testing when using stochastic generation of actions
+            self.training_stats['final_stoch_total_restarts'] = []
+            # Total reward accumulated over given trajectory length during final testing when using stochastic generation of actions
+            self.training_stats['final_stoch_acc_reward'] = []
 
         # Assign functional nonlinearity
         nonlinearity = get_non_linearity(nonlinearity)
@@ -566,15 +575,27 @@ class ProximalPolicyOptimization:
             self.log('train_total_restarts', total_restarts)
 
         elif eval_type == FINAL:
-            print('Final demo:')
-            if self.show_final_demo:
-                # Wait for user to confirm that (s)he is ready to witness the final demo
-                input("Waiting for user confirmation... Hit ENTER.")
-                total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=True)
-            else:
-                total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
-            self.log('final_acc_reward', total_rewards)
-            self.log('final_total_restarts', total_restarts)
+            print('Final demo(s):')
+            # Final demos can be both deterministic and stochastic in order to demonstrate the difference between the two
+            if self.deterministic_eval:
+                if self.show_final_demo:
+                    # Wait for user to confirm that (s)he is ready to witness the final demo
+                    input("Waiting for user confirmation... Hit ENTER.")
+                    total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=True, deterministic_eval=True)
+                else:
+                    total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=False, deterministic_eval=True)
+                self.log('final_det_acc_reward', total_rewards)
+                self.log('final_det_total_restarts', total_restarts)
+
+            if self.stochastic_eval:
+                if self.show_final_demo:
+                    # Wait for user to confirm that (s)he is ready to witness the final demo
+                    input("Waiting for user confirmation... Hit ENTER.")
+                    total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=True, deterministic_eval=False)
+                else:
+                    total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=False, deterministic_eval=False)
+                self.log('final_stoch_acc_reward', total_rewards)
+                self.log('final_stoch_total_restarts', total_restarts)
 
 
     def log_train_stats(self, iteration_loss):
@@ -583,7 +604,7 @@ class ProximalPolicyOptimization:
         print('Average epoch loss of current iteration: {:.2f}'.format((iteration_loss / self.epochs)))
 
 
-    def eval(self, time_steps: int = None, render=False):
+    def eval(self, time_steps: int = None, render: bool = False, deterministic_eval: bool = True):
 
         # Let a single agent interact with its env for a given nr of time steps and obtain performance stats
 
@@ -598,7 +619,7 @@ class ProximalPolicyOptimization:
 
         # Initialize testing environment - either for deterministic evaluation or for stochastic evaluation (depending
         # on setting)
-        if self.deterministic_eval:
+        if deterministic_eval:
             env, state, total_rewards = self.random_env_start(env)
         else:
             state = self.init_markov_state(add_batch_dimension(env.reset()))
@@ -624,7 +645,7 @@ class ProximalPolicyOptimization:
                     action = env.action_space.sample()
                 else:
                     # Predict action using policy - Either by stochastic sampling or deterministically
-                    if self.deterministic_eval:
+                    if deterministic_eval:
                         action = self.policy.forward_deterministic(state.to(self.device)).squeeze().cpu().numpy()
                     else:
                         action = self.policy(state.to(self.device)).squeeze().cpu().numpy()
@@ -677,7 +698,7 @@ class ProximalPolicyOptimization:
                     total_restarts += 1
 
                     # Reset simulation because it has terminated
-                    if self.deterministic_eval:
+                    if deterministic_eval:
                         env, state, total_rewards = self.random_env_start(env)
                     else:
                         state = self.init_markov_state(add_batch_dimension(env.reset()))
