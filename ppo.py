@@ -326,9 +326,6 @@ class ProximalPolicyOptimization:
                         if terminal_state.any():
                             break
 
-                    if (accumulated_reward >= 0).any():
-                        print("++++ ---- SUCCESS! ---- ++++")
-
                     # Transform latest observations to tensor data
                     reward = accumulated_reward
                     next_state = self.env2markov(state, next_state)     # Note: state == Markov state, next_state == state as returned by env
@@ -657,9 +654,6 @@ class ProximalPolicyOptimization:
                         # If env is done, i.e. simulation has terminated, stop repeating actions
                         if terminal_state:
                             break
-
-                if accumulated_reward >= 0:
-                    print("++++ ---- SUCCESS (Eval)! ---- ++++")
 
                 # Count accumulative rewards
                 total_rewards += accumulated_reward
