@@ -3,7 +3,6 @@ import json
 import random
 import string
 from datetime import datetime
-from plot import plot_avg_trajectory_len
 from ppo import ProximalPolicyOptimization as PPO
 
 
@@ -42,13 +41,6 @@ def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict, config: json):
 
     if args.stats_path != '-':
         save(args=args, attribute='stats_path', saver=ppo.save_train_stats)
-
-    if args.graphic_path != '-':
-        # Check if provided path exists, if not create it
-        if not os.path.isdir(save_dir):
-            os.makedirs(save_dir)
-        # Save statistics
-        plot_avg_trajectory_len(train_stats, save_path=args.graphic_path)
 
     # Save config
     with open(save_dir + '/config.json', 'w') as f:
