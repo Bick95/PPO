@@ -4,13 +4,25 @@
     'grayscale_transform': False,
     'markov_length': 4,
     'dilation': 1,
-    "total_num_state_transitions": 600000,
+    "total_num_state_transitions": 1000000,
     "param_sharing": True,
 
     "epochs": 5,
     "parallel_agents": 5,
-    "learning_rate_pol": 0.00001,
-    "learning_rate_val": 0.00001,
+    "learning_rate_pol": {
+        'decay_type': 'exponential',
+        'decay_rate': 0.99,
+        'initial_value': 0.00002,
+        'min_value': 0.000008,
+        'verbose': True,
+    },
+    "learning_rate_val": {
+        'decay_type': 'exponential',
+        'decay_rate': 0.98,
+        'initial_value': 0.00001,
+        'min_value': 0.000008,
+        'verbose': True,
+    },
 
     "clipping_parameter": {
         'decay_type': 'linear',

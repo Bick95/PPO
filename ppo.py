@@ -701,7 +701,11 @@ class ProximalPolicyOptimization:
 
                     # Reset simulation because it has terminated
                     if deterministic_eval:
-                        env, state, total_rewards = self.random_env_start(env)
+                        env, state, reward = self.random_env_start(env)
+
+                        # Sum rewards over time steps
+                        total_rewards += reward
+
                     else:
                         state = self.init_markov_state(add_batch_dimension(env.reset()))
 
