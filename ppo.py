@@ -90,16 +90,22 @@ class ProximalPolicyOptimization:
         self.training_stats = {
             # How loss accumulated over one epoch develops over time
             'devel_epoch_loss': [],
-            # How average accumulated over all epochs develops per iteration
+            # How loss accumulated over all epochs develops per train iteration
             'devel_itera_loss': [],
 
+            # Total nr of restarts per given trajectory length during initial testing
             'init_total_restarts': [],
+            # Total reward accumulated over given trajectory length during initial testing
             'init_acc_reward': [],
 
+            # Total nr of restarts per given trajectory length during intermediate testing
             'train_total_restarts': [],
+            # Total reward accumulated over given trajectory length during intermediate testing
             'train_acc_reward': [],
 
+            # Total nr of restarts per given trajectory length during final testing
             'final_total_restarts': [],
+            # Total reward accumulated over given trajectory length during final testing
             'final_acc_reward': [],
         }
 
@@ -461,7 +467,7 @@ class ProximalPolicyOptimization:
 
                 # Document training progress after one full epoch/iteration of training
                 iteration_loss += acc_epoch_loss
-                self.training_stats['devel_epoch_loss'].append(acc_epoch_loss)  # TODO: outsource
+                self.log('devel_epoch_loss', acc_epoch_loss)
 
             # Potentially decrease learning rate every iteration
             if self.lr_scheduler_pol:
@@ -478,8 +484,6 @@ class ProximalPolicyOptimization:
 
             # Document training progress at the end of a full iteration
             self.log_train_stats(iteration_loss=iteration_loss)
-            self.training_stats['devel_itera_loss'].append(iteration_loss)  # TODO: outsource
-            print('Average epoch loss of current iteration:', (iteration_loss/self.epochs))  # TODO: outsource
             self.eval_and_log(eval_type=INTERMEDIATE)
             print()
 
@@ -546,34 +550,40 @@ class ProximalPolicyOptimization:
         print('Saved training stats.')
 
 
+    def log(self, key, value):
+        self.training_stats[key].append(value)
+
+
     def eval_and_log(self, eval_type: int):
 
         if eval_type == INITIAL:
             print('Initial evaluation:')
             total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
-            self.training_stats['init_acc_reward'].append(total_rewards)
-            self.training_stats['init_total_restarts'].append(total_restarts)
+            self.log('init_acc_reward', total_rewards)
+            self.log('init_total_restarts', total_restarts)
 
         elif eval_type == INTERMEDIATE:
             print("Current iteration's demo:")
             total_rewards, _, total_restarts = self.eval()
-            self.training_stats['train_acc_reward'].append(total_rewards)
-            self.training_stats['train_total_restarts'].append(total_restarts)
+            self.log('train_acc_reward', total_rewards)
+            self.log('train_total_restarts', total_restarts)
 
         elif eval_type == FINAL:
             print('Final demo:')
             if self.show_final_demo:
+                # Wait for user to confirm that (s)he is ready to witness the final demo
                 input("Waiting for user confirmation... Hit ENTER.")
                 total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=True)
             else:
                 total_rewards, _, total_restarts = self.eval(time_steps=self.time_steps_extensive_eval, render=False)
-            self.training_stats['final_acc_reward'].append(total_rewards)
-            self.training_stats['final_total_restarts'].append(total_restarts)
+            self.log('final_acc_reward', total_rewards)
+            self.log('final_total_restarts', total_restarts)
 
 
     def log_train_stats(self, iteration_loss):
-        self.training_stats['devel_itera_loss'].append(iteration_loss)
-        print('Average epoch loss of current iteration:', (iteration_loss / self.epochs))
+        self.log('devel_itera_loss', iteration_loss)
+        print('Total epoch loss of current iteration: {:.2f}'.format(iteration_loss))
+        print('Average epoch loss of current iteration: {:.2f}'.format((iteration_loss / self.epochs)))
 
 
     def eval(self, time_steps: int = None, render=False):
@@ -690,6 +700,6 @@ class ProximalPolicyOptimization:
         avg_traj_len = time_steps / total_restarts
 
         print('Total accumulated reward over', time_steps, 'time steps:', total_rewards)
-        print('Average trajectory length in time steps given', total_restarts, ' restarts:', avg_traj_len)
+        print('Average trajectory length in time steps given', total_restarts, ' restarts: {:.2f}'.format(avg_traj_len))
 
         return total_rewards, avg_traj_len, total_restarts
