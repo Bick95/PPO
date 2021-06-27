@@ -123,7 +123,7 @@ def get_lr_scheduler(learning_rate: float or dict, optimizer, train_iterations: 
 
         decay_type = learning_rate['decay_type'].lower() if 'decay_type' in learning_rate.keys() else None
         initial_lr = learning_rate['initial_value'] if 'initial_value' in learning_rate.keys() else None
-        decay_steps = learning_rate['decay_steps'] if 'decay_steps' in learning_rate.keys() else None
+        decay_steps = learning_rate['decay_steps'] if 'decay_steps' in learning_rate.keys() else train_iterations
         decay_rate = learning_rate['decay_rate'] if 'decay_rate' in learning_rate.keys() else None
         min_value = learning_rate['min_value'] if 'min_value' in learning_rate.keys() else None
 
