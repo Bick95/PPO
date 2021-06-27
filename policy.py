@@ -1,10 +1,9 @@
 import gym
-from scheduler import Scheduler
 import torch.nn.functional as F
 from input_net_modules import InMLP, InCNN
 from output_net_modules import OutMLP
-from constants import DISCRETE, CONTINUOUS
-from ppo_utils import get_scheduler, is_trainable, is_provided
+from constants import DISCRETE
+from utils.utils_ppo import get_scheduler, is_trainable, is_provided
 
 import torch
 import torch.nn as nn

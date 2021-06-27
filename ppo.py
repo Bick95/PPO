@@ -10,7 +10,7 @@ from value_net import ValueNet
 from torchvision.transforms import Resize
 from torchvision.transforms import Grayscale
 from constants import DISCRETE, CONTINUOUS, INITIAL, INTERMEDIATE, FINAL
-from ppo_utils import add_batch_dimension, simulation_is_stuck, visualize_markov_state, \
+from utils.utils_ppo import add_batch_dimension, simulation_is_stuck, visualize_markov_state, \
     get_scheduler, get_optimizer, get_lr_scheduler, get_non_linearity, is_trainable, nan_error, print_nan_error_loss
 
 

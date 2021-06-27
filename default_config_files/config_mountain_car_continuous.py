@@ -4,7 +4,7 @@
     'grayscale_transform': False,
     'markov_length': 10,
     'dilation': 2,
-    "total_num_state_transitions": 100000,
+    "total_num_state_transitions": 3000000,
     "param_sharing": True,
     'nonlinearity': 'relu',
 
