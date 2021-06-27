@@ -50,7 +50,7 @@ class CustomLRScheduler:
 
         elif self.decay_type != 'constant' and self.decay_type != 'trainable':
             self.decay_rate = 0.05
-            raise print("Decay rate for " + self.value_name + " not provided! Chosen default: " + str(self.decay_rate))
+            print("Decay rate for " + self.value_name + " not provided! Chosen default: " + str(self.decay_rate))
 
 
         self._step = None  # Internal step function decrementing self.value each time that step()-method is invoked
