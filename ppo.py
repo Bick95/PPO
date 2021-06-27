@@ -699,7 +699,7 @@ class ProximalPolicyOptimization:
 
         avg_traj_len = time_steps / total_restarts
 
-        print('Total accumulated reward over', time_steps, 'time steps:', total_rewards)
+        print('Total accumulated reward over', time_steps, 'time steps: {:.2f}'.format(total_rewards))
         print('Average trajectory length in time steps given', total_restarts, ' restarts: {:.2f}'.format(avg_traj_len))
 
         return total_rewards, avg_traj_len, total_restarts
