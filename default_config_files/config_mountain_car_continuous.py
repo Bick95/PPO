@@ -43,7 +43,7 @@
     "entropy_contrib_factor": 0.05,
     "vf_contrib_factor": 1.,
     
-    'show_final_demo': False,
+    'show_final_demo': True,
     'frame_duration': 0.001,  # Indicates how long rendered frames are shown to yield a nice and smooth visualization
     'deterministic_eval': True,
     'stochastic_eval': True,

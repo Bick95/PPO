@@ -434,7 +434,7 @@ class ProximalPolicyOptimization:
 
                     # Evaluate loss function first component-wise, then combined:
                     # L^{CLIP}
-                    L_CLIP = self.L_CLIP(log_prob, log_prob_old_, advantage_, iteration)
+                    L_CLIP = self.L_CLIP(log_prob, log_prob_old_, advantage_)
 
                     # L^{V}
                     L_V = self.L_VF(state_val, target_state_val_)
@@ -501,7 +501,7 @@ class ProximalPolicyOptimization:
         return self.training_stats
 
 
-    def L_CLIP(self, log_prob, log_prob_old, advantage, current_train_iteration):
+    def L_CLIP(self, log_prob, log_prob_old, advantage):
         # Computes PPO's main objective L^{CLIP}
 
         prob_ratio = torch.exp(log_prob - log_prob_old)
