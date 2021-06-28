@@ -125,6 +125,9 @@ class ProximalPolicyOptimization:
         if isinstance(env, str):
             env = gym.make(env)
 
+        if sum(env.action_space.shape) > 0:
+            raise NotImplementedError("This implementation supports only action spaces with a single action to be predicted per time step.")
+
         self.env_name = env.unwrapped.spec.id
         self.action_space = env.action_space
         self.dist_type = DISCRETE if isinstance(self.action_space, gym.spaces.Discrete) else CONTINUOUS
