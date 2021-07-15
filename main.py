@@ -40,8 +40,13 @@ def main(args):
         # Set up PPO agent as specified in configurations file
         ppo = PPO(**config)
 
-        # Train the PPO agent
-        train_stats = ppo.learn()
+        try:
+            # Train the PPO agent
+            train_stats = ppo.learn()
+        except KeyboardInterrupt:
+            # In case of keyboard interrupt, don't discard full test run so far, but make final eval and save outcome so far
+            from constants import FINAL
+            ppo.eval_and_log(eval_type=FINAL)
 
         # Save as requested
         save_ppo(ppo=ppo, args=args, save_dir=save_dir, train_stats=train_stats, config=config)
