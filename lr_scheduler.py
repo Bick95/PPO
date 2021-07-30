@@ -14,7 +14,7 @@ class CustomLRScheduler:
                  verbose: bool = False,
                  ):
 
-        # Keeps track of and decays a given value in a given way
+        # Keeps track of and decays a given value in a given way. Used for custom scheduling of an optimizer's learning rate
 
         self.optimizer = optimizer
 
@@ -59,7 +59,7 @@ class CustomLRScheduler:
 
 
     def init_step_function(self):
-        # Assign function that will decay the value to be decayed whenever step() method is called
+        # Assign function that will decay the value to be decayed whenever scheduler's step() method is called
 
         if self.decay_type.lower() == 'constant':
             # Handle cases where value is not supposed to decay

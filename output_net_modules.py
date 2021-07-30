@@ -3,7 +3,8 @@ from constants import DISCRETE
 
 
 class OutMLP(nn.Module):
-    # This module implicitly assumes in Discrete Output mode that only one action is to be predicted at a time.
+    # This module implicitly assumes that only one action is to be predicted per time step.
+    # It computes the parameterization for some probability distribution
 
     def __init__(self,
                  output_features: int,
@@ -13,7 +14,7 @@ class OutMLP(nn.Module):
         super(OutMLP, self).__init__()
 
         # Construct NN-processing pipeline consisting of concatenation of layers to be applied to any input
-        # (Avoids if-statements for whether to apply the Softmax in forward pass)
+        # (Using this pipeline-approach avoids if-statements for determining whether to apply the Softmax in forward pass)
         self.pipeline = [
 
             # Add output layer
@@ -33,6 +34,7 @@ class OutMLP(nn.Module):
             self.pipeline.append(nn.Softmax(dim=1))
 
     def forward(self, x):
+        # Forward pass to compute the parameterization for the probability distribution following the policy network
 
         for layer in self.pipeline:
             x = layer(x)

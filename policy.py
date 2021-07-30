@@ -27,11 +27,12 @@ class Policy(nn.Module):
         super(Policy, self).__init__()
 
 
-        # Determine whether output distribution is to be Discrete or Continuous
+        # Determine whether output distribution is to be Discrete (--> Multinomial) or Continuous (--> Gaussian)
         self.dist_type = dist_type
         # NOTE!
-        # In Continuous case, n actions may be sampled concurrently per env.
-        # In Discrete case, only one action (out of n options) is sampled at a time from the action space in a given env.
+        # In both continuous and discrete action spaces, only a single action per time step can be sampled. Therefore,
+        # in the continuous case always num_actions=1. However, in the discrete case, num_actions denotes the number of
+        # possible actions from which an action can be chosen in each time step, such that usually num_actions > 1.
         # Thus, meaning of self.num_actions varies between these two output spaces/cases!
         if self.dist_type is DISCRETE:
             self.num_actions = action_space.n
@@ -93,20 +94,24 @@ class Policy(nn.Module):
         ]
 
         # To be assigned later (during execution). Will contain parameterized distribution (one per parallel agent)
-        self.dist = None  # Will contain concrete probability distributions for sampling actions
+        self.dist = None
 
 
     def forward(self, x: torch.tensor):
+        # Generation of actions via stochastic sampling
 
+        # Apply policy network
         for layer in self.pipeline:
             x = layer(x)
 
+        # Parameterize probability distribution
         if self.dist_type is DISCRETE:
             self.dist = self.parameterize_discrete_distribution(x)
 
         else:
             self.dist = self.parameterize_continuous_distribution(x)
 
+        # Sample action (one per parallel agent)
         action = self.dist.sample()
 
         return action
@@ -114,7 +119,7 @@ class Policy(nn.Module):
 
     def parameterize_discrete_distribution(self, x):
         # Discrete action space: x contains vector of probability masses (per minibatch example) which is used to
-        # parameterize a respective categorical (i.e. multinomial) distribution
+        # parameterize a respective categorical (i.e. Multinomial) distribution
         return self.prob_dist(probs=x)
 
 
@@ -123,45 +128,47 @@ class Policy(nn.Module):
         # the respective standard deviations if the latter is trainable
 
         if self.std_trainable:
-            # If standard deviation is trainable, only the first half of x contains the means, second half contains stds
+            # If standard deviation is trainable, only the first half of x contains the means, second half contains standard deviations
             mean = x[:, :self.num_actions]
             std = torch.exp(x[:, self.num_actions:])  # Std deviation cannot be negative, thus the exponential function
             return self.prob_dist(loc=mean, scale=std)
 
         else:
-            # x contains only the means, while stds are provided by scheduler
+            # x contains only the means, while standard deviations are provided by scheduler
             return self.prob_dist(loc=x, scale=self.std.get_value(x.shape[0]))
 
-    def forward_deterministic(self, x: torch.tensor):
-        # Executes a standard forward pass through the policy, but then does not sample actions, but determines them deterministically
 
+    def forward_deterministic(self, x: torch.tensor):
+        # Executes a standard forward pass through the policy, but then always chooses action with highest probability
+
+        # Apply policy network
         for layer in self.pipeline:
             x = layer(x)
 
+        # Select action with highest probability
         if self.dist_type is DISCRETE:
-            #print("Parameterization discrete:", x)
             action = torch.argmax(x, dim=-1)  # Choose for every minibatch example the action with largest probability mass
         else:
-            #print("Parameterization continuous:", x)
 
             if self.std_trainable:
                 # If standard deviation is trainable, only the first half of x contains the means, i.e. the deterministic actions
                 action = x[:, :self.num_actions]
-                #print('action_:', action)
             else:
                 action = x  # x contains the mean of a Gaussian per minibatch example. It's like sampling with 0 standard deviation
 
-        #print("Action:", action)
         return action
 
 
     def log_prob(self, action):
+        # Returns the log-probability of some action (given a previously parameterized distribution stored in self.dist)
         return self.dist.log_prob(action)
 
 
     def entropy(self):
+        # Returns the entropy of a given probability distribution
         return self.dist.entropy()
 
 
     def get_non_output_layers(self):
+        # Used for parameter sharing
         return self.input_module

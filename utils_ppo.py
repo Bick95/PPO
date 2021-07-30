@@ -51,8 +51,9 @@ def visualize_markov_state(state: np.ndarray or torch.tensor,
 
 def get_scheduler(parameter: float or dict, device: torch.device, train_iterations: int,
                   parameter_name: str = None, verbose: bool = False):
-    # Determine how to handle clipping constant - keep it constant or anneal from some max value to some min value
-    # Do the scheduling via a scheduler
+    # Schedulers are used to decay parameters (e.g. the clipping parameter epsilon or the (non-fixed-)standard deviation.
+    # This method takes some specification of how a scheduler is supposed to decay a given parameter and returns a
+    # suitable scheduler
 
     if isinstance(parameter, float):
         return Scheduler(parameter, 'constant', device, value_name=parameter_name, verbose=verbose)
@@ -87,6 +88,7 @@ def get_scheduler(parameter: float or dict, device: torch.device, train_iteratio
 
 
 def get_non_linearity(nonlinearity):
+    # Takes a string-specification of non-linearity-type and turns it into a functional non-linearity
     if nonlinearity.lower() == 'relu':
         return F.relu
     elif nonlinearity.lower() == 'sigmoid':
@@ -94,10 +96,11 @@ def get_non_linearity(nonlinearity):
     elif nonlinearity.lower() == 'tanh':
         return F.tanh
     else:
-        raise NotImplementedError("Only relu ")
+        raise NotImplementedError("Only relu or sigmoid or tanh admissible as non-linearities")
 
 
 def get_optimizer(learning_rate: float or dict, model_parameters):
+    # This method returns an Adam optimizer according to some specification
     if isinstance(learning_rate, float):
         # Simple optimizer with constant learning rate for neural net
         return torch.optim.Adam(params=model_parameters, lr=learning_rate)
@@ -112,6 +115,8 @@ def get_optimizer(learning_rate: float or dict, model_parameters):
 
 def get_lr_scheduler(learning_rate: float or dict, optimizer, train_iterations: int,
                      value_name: str = 'Learning Rate to be decreased'):
+    # For scheduling learning rates, readily available PyTorch schedulers are used. This function takes some
+    # specification of how the scheduler is supposed to work and returns a correspondingly set up scheduler
 
     if isinstance(learning_rate, float):
         # Simple optimizer with constant learning rate for neural net, thus no scheduler needed
@@ -127,7 +132,7 @@ def get_lr_scheduler(learning_rate: float or dict, optimizer, train_iterations: 
         decay_rate = learning_rate['decay_rate'] if 'decay_rate' in learning_rate.keys() else None
         min_value = learning_rate['min_value'] if 'min_value' in learning_rate.keys() else None
 
-        # Choose which scheduler to return
+        # Choose which scheduler to return - Dependent on the requested decay type
         if decay_steps or decay_rate or min_value is not None:
             # If settings are provided that could not be incorporated into PyTorch's own LR-schedulers, use a custom one
             return CustomLRScheduler(optimizer=optimizer, initial_value=initial_lr,
@@ -154,24 +159,26 @@ def get_lr_scheduler(learning_rate: float or dict, optimizer, train_iterations: 
 
 
 def is_provided(param):
-    # Returns whether a parameter is provided or not
+    # Returns whether a parameter-specification is provided or not
     if param is not None:
         return True
     return False
 
 
 def is_trainable(param):
-    # Returns true if a provided parameter is trainable or not
+    # Returns true if a provided parameter is supposed to be trainable, otherwise false
     if isinstance(param, dict) and 'decay_type' in param.keys() and param['decay_type'] == 'trainable':
         return True
     return False
 
 
 def nan_error(tensor):
+    # Checks if NAN-error is present in a tensor
     return torch.isnan(tensor).any()
 
 
 def print_nan_error_loss(loss, L_CLIP, L_V, action, log_prob, log_prob_old, state, state_val, L_ENTROPY=None):
+    # Print some special error message when NAN-error is detected
     print(
         "Loss happened to be nan. This indicates loss terms going out of bounds. Please check your hyperparameters once again.")
     print('Values were as follows:\n')

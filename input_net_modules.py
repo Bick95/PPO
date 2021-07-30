@@ -169,7 +169,7 @@ class InMLP(nn.Module):
 
         ]
 
-        # Add optional hidden layers
+        # Add optional hidden layers (in accordance with specification in network_architecture)
         if isinstance(network_structure, list):
             for i in range(1, len(network_structure)):
                 self.pipeline.append(
@@ -184,7 +184,7 @@ class InMLP(nn.Module):
 
 
     def forward(self, x):
-
+        # Forward-pass through the network
         for layer in self.pipeline:
             x = self.nonlinearity(layer(x))
 

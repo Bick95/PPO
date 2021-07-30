@@ -20,10 +20,14 @@ def extract_params_from_structure(structure: list, index: int, key: str, vertica
 
 
 def size_preserving_padding(i, k, d: int = 1, s: int = 1):
+    # Computes the amount of padding needed to preserve input dimension of some convolutional layer's input
+
     # Can be generalized to: ((out_dim - 1)*stride - input_dim + kernel_size + (kernel_size-1)*(dilation-1)) / 2)
     return int(torch.floor(torch.tensor(((i - 1)*s - i + k + (k-1)*(d-1)) / 2)).numpy())
 
 
 def out_dim(i, k, p, d: int = 1, s: int = 1):
+    # Computes in one dimension the size of the output of a convolutional layer
+
     # Ref: https://discuss.pytorch.org/t/how-to-keep-the-shape-of-input-and-output-same-when-dilation-conv/14338/2?u=bick95
     return int(torch.floor(torch.tensor((i + 2*p - k - (k - 1)*(d - 1)) / s + 1)).numpy())

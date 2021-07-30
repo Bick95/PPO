@@ -2,6 +2,7 @@ import os
 import json
 import random
 import string
+import argparse
 from datetime import datetime
 from ppo import ProximalPolicyOptimization as PPO
 
@@ -46,3 +47,25 @@ def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict, config: json):
     with open(save_dir + '/config.json', 'w') as f:
         json.dump(config, f)
 
+
+def get_parser(save_dir: str):
+    # Creates and returns an argument parser
+    parser = argparse.ArgumentParser(description='Train or Demo the performance of a PPO agent.')
+
+    # Training
+    parser.add_argument('-c', '--config_path', type=str, required=False,
+                        help='Specify path from where to load non-default config file',
+                        default='./default_config_files/config_mountain_car_continuous.py')
+    parser.add_argument('-s', '--stats_path', type=str, required=False,
+                        help='Specify path where to save training stats. "-" for False.',
+                        default=save_dir + 'train_stats.json')
+    parser.add_argument('-p', '--policy_net_path', type=str, required=False,
+                        help='Specify path where to save policy net. "-" for False.',
+                        default=save_dir + 'policy_model.pt')
+    parser.add_argument('-v', '--value_net_path', type=str, required=False,
+                        help='Specify path where to save value net. "-" for False.',
+                        default=save_dir + 'val_net_model.pt')
+
+    # Demo/Eval
+    parser.add_argument('-d', '--demo_path', type=str, required=False,
+                        help='Specify path from where to load trained policy model for demonstrating its learning outcome visually.')

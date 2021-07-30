@@ -49,13 +49,12 @@ class Scheduler:
             # Thus, compute the decay rate for linear decay
             self.decay_rate = (self.value - self.min_value) / self.decay_steps
 
-        elif self.decay_type != 'constant' and self.decay_type != 'trainable':
+        elif self.decay_type != 'constant':
             self.decay_rate = 0.05
             raise print("Decay rate for " + self.value_name + " not provided! Chosen default: " + str(self.decay_rate))
 
 
         self._step = None  # Internal step function decrementing self.value each time that step()-method is invoked
-
         self.init_step_function()
 
 
