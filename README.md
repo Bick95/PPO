@@ -81,4 +81,4 @@ performance, do the following:
 `main.py` file
 3. Run `python main.py -c='./train_results/2021_06_27__22_58_00__tsrOOxrwle/config_cartpole.py' -d='./train_results/2021_06_27__22_58_00__tsrOOxrwle/policy_model.pt'`, 
 where the `c`-flag stands for "**c**onfig" again and the `d`-flag provides the path to the 
-saved model. 
+archive containing the trained policy network. 
