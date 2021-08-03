@@ -3,6 +3,7 @@ import json
 import random
 import string
 import argparse
+from shutil import copyfile
 from datetime import datetime
 from ppo import ProximalPolicyOptimization as PPO
 
@@ -27,11 +28,11 @@ def save(args: json, attribute: str, saver):
         print("Save path: ", getattr(args, attribute))
         if not os.path.isdir(save_path):
             os.makedirs(save_path)
-        # Save policy net
+        # Save content, using saver-method, to given path specified in the arguments
         saver(getattr(args, attribute))
 
 
-def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict, config: json):
+def save_ppo(ppo: PPO, args, save_dir: str, config: json):
     # Saves all components that may be saved after a training run as requested by user through command line arguments
 
     if args.policy_net_path != '-':
@@ -43,12 +44,17 @@ def save_ppo(ppo: PPO, args, save_dir: str, train_stats: dict, config: json):
     if args.stats_path != '-':
         save(args=args, attribute='stats_path', saver=ppo.save_train_stats)
 
-    # Save config
-    with open(save_dir + '/config.json', 'w') as f:
-        json.dump(config, f)
+
+def copy_config_to_results_folder(src_path, save_path):
+    # Check if provided path exists, if not create it
+    if not os.path.isdir(save_path):
+        os.makedirs(save_path)
+
+    # Copy config file
+    copyfile(src=src_path, dst=save_path+src_path.split('/')[-1])
 
 
-def get_parser(save_dir: str):
+def get_argparser(save_dir: str):
     # Creates and returns an argument parser
     parser = argparse.ArgumentParser(description='Train or Demo the performance of a PPO agent.')
 
@@ -69,3 +75,5 @@ def get_parser(save_dir: str):
     # Demo/Eval
     parser.add_argument('-d', '--demo_path', type=str, required=False,
                         help='Specify path from where to load trained policy model for demonstrating its learning outcome visually.')
+
+    return parser

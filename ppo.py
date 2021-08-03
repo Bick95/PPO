@@ -792,6 +792,8 @@ class ProximalPolicyOptimization:
                 self.log('final_stoch_acc_reward', total_rewards)
                 self.log('final_stoch_total_restarts', total_restarts)
 
+        return self.training_stats
+
 
     def log_train_stats(self, iteration_loss):
         self.log('devel_itera_loss', iteration_loss)
