@@ -79,4 +79,6 @@ performance, do the following:
 1. Open the **terminal**
 2. **Navigate** to the main directory of this repository, i.e. the directory containing the 
 `main.py` file
-3. Run `python main.py -c='./train_results/2021_06_27__22_58_00__tsrOOxrwle/config_cartpole.py' -d='./train_results/2021_06_27__22_58_00__tsrOOxrwle/policy_model.pt'`
+3. Run `python main.py -c='./train_results/2021_06_27__22_58_00__tsrOOxrwle/config_cartpole.py' -d='./train_results/2021_06_27__22_58_00__tsrOOxrwle/policy_model.pt'`, 
+where the `c`-flag stands for "**c**onfig" again and the `d`-flag provides the path to the 
+saved model. 
